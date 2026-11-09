@@ -8,7 +8,7 @@ Dit is **geen volledige port van Punchy 3.1b**. De originele JAR is geïnventari
 - Actiecoördinatie en een gedeeltelijke implementatie van attack/mining/equip/inspect/bow/crossbow/shield/trident/spear/eat/drink.
 - Parsing van Punchy's tuningtemplate, handed clipselectie, combo's en een deel van item/group-configuratie.
 - Een revisiegepinde Horizon-adapter met de herstelde camera/body/arm-hiërarchie, griptransformaties, standaard itemaanhechting en third-person itemdisplaycontext. De volledige procedurele en speciale renderlagen ontbreken nog. De eerdere Horizon-poseadapter blijft als vergelijkingsoptie beschikbaar.
-- 223 clips, de skelethiërarchie en de standaardtuning worden met de Rust-game meegecompileerd. Tijdens het spelen zijn geen Punchy-JAR, Java, Fabric of losse Punchy-configuratiebestanden nodig.
+- De standaardanimaties, geometrie en tuning worden als `Punchy Built-in Animations` resource-pack-archief meegeleverd. Horizon installeert dit pack wanneer Punchy is ingeschakeld en houdt het onder de door de speler gekozen resource packs. Tijdens het spelen zijn geen Punchy-JAR, Java of Fabric nodig.
 
 ## Grenzen
 
@@ -60,15 +60,16 @@ De grafische smoke-test staat in `tools/runtime_smoke.py`; deze gebruikt geen Pu
 
 ## Android resource packs and Hand Editor
 
-The Android runtime reads Punchy animation, third-person animation, geometry and
-tuning assets from the active resource-pack overlay. Supported locations are
-`assets/minecraft/punchy/animations/player.animation.json`,
-`assets/punchy/animations/player_3_p.animation.json`,
-`assets/minecraft/punchy/animations/player_3_p.animation.json` (fallback),
-`assets/punchy/geo/player.geo.json`, and
-`assets/minecraft/punchy/compat/tuning_template.json`. Missing files and clips
-fall back to the bundled Punchy defaults. Resource reload invalidates the cache
-and reloads the active overlay.
+The Android runtime discovers Punchy animation and compatibility JSON files
+recursively in `assets/punchy/animations/`,
+`assets/minecraft/punchy/animations/`, `assets/minecraft/punchy/compat/`, and
+`assets/punchy/compat/`. It also reads `assets/punchy/geo/player.geo.json` and
+preserves the selected resource-pack layers for animation and compatibility
+files with the same path. Higher-priority pack entries are considered first;
+compat profiles then merge with the same first-profile-wins behavior as Punchy,
+including the external `default_tuning` replacement rule. Ontbrekende bestanden en
+clips vallen terug op het ingebouwde Punchy-resource-pack. Resource reload invalidates the
+cache and reloads the active overlay.
 
 Options → Mods → Punchy provides a touch-friendly Hand Editor for the held main
 or off hand. It supports Item, Arm and Fishing Line targets; Item, Tag, Group and

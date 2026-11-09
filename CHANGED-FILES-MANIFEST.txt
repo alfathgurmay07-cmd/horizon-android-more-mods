@@ -1,12 +1,44 @@
-HORIZON ANDROID — CHANGED FILES ONLY
+HORIZON PUNCHY CUMULATIVE DELTA
+Base: horizon-android-more-mods-android (6).zip
+Scope: only files added or modified relative to the original source archive.
+Modified files: 18
+Added files: 3
+Removed files: 0
 
-Added/modified files: 37
-Removed files: 2
+BUILT-IN RESOURCE PACK ARCHITECTURE
+Punchy Built-in Animations is installed at assets/minecraft/resourcepacks/punchy.zip when the Punchy mod is enabled.
+The pack is required and pinned at the bottom of the active resource-pack stack.
+Player-selected resource packs are layered above it; matching custom asset paths override built-in assets.
+The built-in archive contains pack.mcmeta, the default Punchy animation JSON, player geometry, and tuning template.
 
-This archive contains only files added or modified since the original project snapshot.
-Deleted files cannot be represented by copying files; remove these old paths when applying:
-- packaging/android/dev-builds.yml
-- .github/workflows/android-dev.yml
+MODIFIED FILES
+crates/horizon-client-render/src/mod_list.rs
+crates/horizon-client-render/src/options_ui.rs
+crates/horizon-client-render/src/packs.rs
+crates/horizon-client-render/src/packs/cache.rs
+crates/horizon-client/src/game.rs
+crates/horizon-client/src/game/android_bundled.rs
+crates/horizon-client/src/game/native_hooks.rs
+crates/horizon-client/src/game/options.rs
+crates/horizon-client/src/game/packs.rs
+crates/horizon-client/src/game/startup_menu.rs
+mods/official/punchy/README.md
+mods/official/punchy/mixins/punchy/README.md
+mods/official/punchy/mixins/punchy/engine/attachments.rs
+mods/official/punchy/mixins/punchy/engine/engine.rs
+mods/official/punchy/mixins/punchy/engine/resources.rs
+mods/official/punchy/mixins/punchy/runtime.rs
+packaging/android/res/drawable-nodpi/launcher_icon.png
+tests/test_punchy_resourcepack_hand_editor.py
 
-Main workflow: .github/workflows/android-build.yml
-No GitHub Actions Secrets are referenced by the Android build workflow.
+ADDED FILES
+mods/official/punchy/mixins/punchy/engine/data/punchy_builtin.zip
+tests/test_punchy_hand_editor_ui_icon.py
+tests/test_punchy_resourcepack_inspect_regressions.py
+
+REMOVED FILES
+(none)
+
+VALIDATION
+22 focused Python tests passed: resource-pack loading/priority, compatibility, Inspect Pickaxe, and Hand Editor parity.
+Rust compilation and Android APK build were not run because Rust toolchain is unavailable in the environment.

@@ -486,11 +486,15 @@ pub fn discover(resources: &Path, packs_dir: &Path) -> Vec<Pack> {
     for (id, key) in [
         ("programmer_art", "resourcePack.programmer_art.name"),
         ("high_contrast", "resourcePack.high_contrast.name"),
+        ("punchy", "pack.punchy.builtin"),
     ] {
         let z = resources.join(format!("assets/minecraft/resourcepacks/{id}.zip"));
-        if z.exists()
-            && let Some(p) = pack(id.into(), Text::translate(key, &[]), Source::Zip(z))
-        {
+        let title = if id == "punchy" {
+            Text::literal("Punchy Built-in Animations")
+        } else {
+            Text::translate(key, &[])
+        };
+        if z.exists() && let Some(p) = pack(id.into(), title, Source::Zip(z)) {
             out.push(p);
         }
     }
@@ -625,7 +629,7 @@ fn build_overlay_uncached(
         files.retain(|name, _| !p.filter.iter().any(|f| f.blocks(name)));
         stacks.retain(|name, _| !p.filter.iter().any(|f| f.blocks(name)));
         for (name, provided) in pack_files(p)? {
-            if merge_kind(&name).is_some() {
+            if merge_kind(&name).is_some() || is_punchy_stack_path(&name) {
                 stacks
                     .entry(name.clone())
                     .or_default()
@@ -809,7 +813,72 @@ fn build_overlay_uncached(
         &filters,
         &zips,
         dependencies,
-    )
+    )?;
+    let owners: BTreeMap<&str, i64> = files
+        .iter()
+        .filter(|(name, _)| is_punchy_stack_path(name))
+        .map(|(name, (owner, _))| (name.as_str(), *owner as i64))
+        .collect();
+    let owner_bytes = serde_json::to_vec(&owners)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let owner_path = out.join("data/horizon_internal/punchy_resource_priorities.json");
+    fs::create_dir_all(owner_path.parent().unwrap())?;
+    fs::write(owner_path, owner_bytes)?;
+
+    let mut stack_manifest = BTreeMap::<String, Vec<(i64, String)>>::new();
+    let mut stack_index = 0usize;
+    for (name, stack) in &stacks {
+        if !is_punchy_stack_path(name) {
+            continue;
+        }
+        let mut entries = Vec::new();
+        for (owner, (path, inner)) in stack {
+            let bytes = match path {
+                Some(path) => fs::read(path).ok(),
+                None => zips
+                    .get(*owner)
+                    .and_then(Option::as_ref)
+                    .and_then(|zip| zip.read(inner).ok()),
+            };
+            let Some(bytes) = bytes else { continue };
+            let stored_path = format!("data/horizon_internal/punchy_resource_stack/{stack_index:06}.json");
+            stack_index += 1;
+            let destination = out.join(&stored_path);
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(destination, bytes)?;
+            entries.push((*owner as i64, stored_path));
+        }
+        if !filters.iter().any(|filter| filter.blocks(name)) {
+            let vanilla_file = vanilla.join(name);
+            dependencies.file(&vanilla_file);
+            if let Ok(bytes) = fs::read(&vanilla_file) {
+                let stored_path = format!("data/horizon_internal/punchy_resource_stack/{stack_index:06}.json");
+                stack_index += 1;
+                let destination = out.join(&stored_path);
+                if let Some(parent) = destination.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(destination, bytes)?;
+                entries.push((-1, stored_path));
+            }
+        }
+        if !entries.is_empty() {
+            stack_manifest.insert(name.clone(), entries);
+        }
+    }
+    let stack_bytes = serde_json::to_vec(&stack_manifest)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    fs::write(out.join("data/horizon_internal/punchy_resource_stacks.json"), stack_bytes)?;
+    Ok(())
+}
+
+fn is_punchy_stack_path(name: &str) -> bool {
+    name.starts_with("assets/punchy/animations/")
+        || name.starts_with("assets/minecraft/punchy/animations/")
+        || name.starts_with("assets/minecraft/punchy/compat/")
+        || name.starts_with("assets/punchy/compat/")
 }
 /// Files vanilla loads from every pack in turn (`getResourceStack`) rather
 /// than from the top pack only.

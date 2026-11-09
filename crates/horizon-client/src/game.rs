@@ -21423,7 +21423,7 @@ pub fn run() -> Result<()> {
         return run_loading(options, early_settings, vanilla_root, None, started);
     }
     let mut pack_error = None;
-    options.resources = packs::startup_root(&vanilla_root, &early_settings.resource_packs, &[])
+    options.resources = packs::startup_root(&vanilla_root, &early_settings.resource_packs, &[], early_settings.mods.enabled.contains("punchy"))
         .unwrap_or_else(|e| {
             log::warn!("Horizon: resource packs not applied: {e}");
             pack_error = Some(e.to_string());

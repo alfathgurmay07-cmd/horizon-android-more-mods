@@ -1550,6 +1550,7 @@ enum Act {
     /// A native mod's key (mod, key) waits for a key; a button of its page.
     NativeKey(usize, usize),
     NativeButton(usize, usize),
+    NativeSlider(usize, usize, f32, bool),
     OpenModFolder,
     /// Credits & Attribution's Credits button (WinScreen without the poem).
     Credits,
@@ -1573,6 +1574,12 @@ enum WKind {
         label: Text,
         value: f32,
         name: String,
+    },
+    NativeSlider {
+        label: Text,
+        value: f32,
+        mod_index: usize,
+        slider_index: usize,
     },
     Text {
         text: Text,
@@ -1716,6 +1723,7 @@ pub struct OptionsUi {
     /// The shader pack option whose slider is held, and the handle's own position: it follows
     /// the pointer while the option takes the nearest of its values.
     shader_dragging: Option<(String, f32)>,
+    native_dragging: Option<(usize, usize, f32)>,
     /// Shift is held during the click (it resets a shader pack option to its default).
     pub shift: bool,
     /// The pressed slider's own position (`AbstractSliderButton.value`) and
@@ -1793,6 +1801,7 @@ impl Default for OptionsUi {
             scroll: 0.0,
             dragging: None,
             shader_dragging: None,
+            native_dragging: None,
             shift: false,
             slider_value: None,
             scrollbar_drag_y: None,
@@ -2509,23 +2518,135 @@ impl OptionsUi {
         let Some(m) = s.mods.installed.get(i) else {
             return Vec::new();
         };
-        let mut rows = vec![Row::Note(m.title.clone())];
+        let mut rows = if m.id == "punchy" { Vec::new() } else { vec![Row::Note(m.title.clone())] };
         let Some(page) = &m.native else {
             return rows;
         };
         let chosen = s.mods.keys.get(&m.id);
-        for (k, [name, label, default]) in page.keys.iter().enumerate() {
-            let key = chosen.and_then(|c| c.get(name)).unwrap_or(default);
-            let mut message = keybinds::display_name(key);
-            if self.selected_native_key == Some((i, k)) {
-                message = Text::literal("> ")
-                    .append(message.with_color(text::WHITE))
-                    .append(" <")
-                    .with_color(text::YELLOW);
+        if m.id != "punchy" {
+            for (k, [name, label, default]) in page.keys.iter().enumerate() {
+                let key = chosen.and_then(|c| c.get(name)).unwrap_or(default);
+                let mut message = keybinds::display_name(key);
+                if self.selected_native_key == Some((i, k)) {
+                    message = Text::literal("> ")
+                        .append(message.with_color(text::WHITE))
+                        .append(" <")
+                        .with_color(text::YELLOW);
+                }
+                let caption = button(0.0, 0.0, 150.0, Text::literal(label.clone()), Act::None);
+                let change = button(0.0, 0.0, 150.0, message, Act::NativeKey(i, k));
+                rows.push(Row::Buttons(inactive(caption), Some(change)));
             }
-            let caption = button(0.0, 0.0, 150.0, Text::literal(label.clone()), Act::None);
-            let change = button(0.0, 0.0, 150.0, message, Act::NativeKey(i, k));
-            rows.push(Row::Buttons(inactive(caption), Some(change)));
+        }
+        if m.id == "punchy" {
+            let native_button = |button_index: usize, width: f32| {
+                let label = match button_index {
+                    28 => "Mirror",
+                    29 => "Reset",
+                    30 => "Save profile",
+                    31 => "Load profile",
+                    32 => "Delete profile",
+                    33 => "Undo",
+                    34 => "Redo",
+                    35 => "Create / add to group",
+                    36 => "Delete group",
+                    37 => "Export",
+                    38 => "Import",
+                    _ => page.buttons.get(button_index).map(String::as_str).unwrap_or_default(),
+                };
+                button(
+                    0.0,
+                    0.0,
+                    width,
+                    Text::literal(label.to_owned()),
+                    Act::NativeButton(i, button_index),
+                )
+            };
+            rows.push(Row::Header("HAND EDITOR"));
+            if let Some(item) = page.buttons.get(41) {
+                rows.push(Row::Note(item.clone()));
+            }
+            rows.push(Row::Buttons(native_button(3, 150.0), Some(native_button(4, 150.0))));
+            rows.push(Row::Buttons(native_button(5, 310.0), None));
+            if let Some(selector) = page.buttons.get(42) {
+                rows.push(Row::Note(selector.clone()));
+            }
+            let has_selector_chips = page.buttons.len() > 44;
+            if has_selector_chips {
+                rows.push(Row::Header("SELECTOR"));
+                let mut chips = (44..page.buttons.len());
+                while let Some(first) = chips.next() {
+                    let second = chips.next().map(|index| native_button(index, 150.0));
+                    rows.push(Row::Buttons(native_button(first, 150.0), second));
+                }
+            }
+            if let Some(profile) = page.buttons.get(43) {
+                rows.push(Row::Note(profile.clone()));
+            }
+            let mut section = String::new();
+            for (slider_index, slider) in page.sliders.iter().enumerate() {
+                if section != slider.section {
+                    section = slider.section.clone();
+                    rows.push(Row::Header(match section.as_str() {
+                        "Position" => "POSITION",
+                        "Rotation" => "ROTATION",
+                        "Size" => "SIZE",
+                        "Pivot" => "PIVOT",
+                        _ => "TRANSFORM",
+                    }));
+                }
+                rows.push(Row::Buttons(
+                    Widget {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 310.0,
+                        h: 20.0,
+                        kind: WKind::NativeSlider {
+                            label: Text::literal(slider.label.clone()),
+                            value: slider.value.clamp(0.0, 1.0),
+                            mod_index: i,
+                            slider_index,
+                        },
+                        list: true,
+                        row: 0,
+                    },
+                    None,
+                ));
+            }
+            rows.push(Row::Header("POSE ACTIONS"));
+            rows.push(Row::Buttons(native_button(29, 150.0), Some(native_button(28, 150.0))));
+            rows.push(Row::Buttons(native_button(37, 150.0), Some(native_button(30, 150.0))));
+            rows.push(Row::Buttons(native_button(33, 150.0), Some(native_button(34, 150.0))));
+            rows.push(Row::Header("PROFILES AND GROUPS"));
+            rows.push(Row::Buttons(native_button(31, 150.0), Some(native_button(32, 150.0))));
+            rows.push(Row::Buttons(native_button(35, 150.0), Some(native_button(36, 150.0))));
+            rows.push(Row::Buttons(native_button(38, 310.0), None));
+            rows.push(Row::Header("HORIZON SETTINGS"));
+            rows.push(Row::Buttons(native_button(0, 150.0), Some(native_button(2, 150.0))));
+            rows.push(Row::Buttons(native_button(1, 310.0), None));
+            if !page.keys.is_empty() {
+                rows.push(Row::Header("KEY BINDS"));
+                for (k, [name, label, default]) in page.keys.iter().enumerate() {
+                    let key = chosen.and_then(|c| c.get(name)).unwrap_or(default);
+                    let mut message = keybinds::display_name(key);
+                    if self.selected_native_key == Some((i, k)) {
+                        message = Text::literal("> ")
+                            .append(message.with_color(text::WHITE))
+                            .append(" <")
+                            .with_color(text::YELLOW);
+                    }
+                    let caption = button(0.0, 0.0, 150.0, Text::literal(label.clone()), Act::None);
+                    let change = button(0.0, 0.0, 150.0, message, Act::NativeKey(i, k));
+                    rows.push(Row::Buttons(inactive(caption), Some(change)));
+                }
+            }
+            if let Some(source) = page.buttons.get(39) {
+                rows.push(Row::Note(source.clone()));
+            }
+            if let Some(status) = page.buttons.get(40) {
+                rows.push(Row::Note(status.clone()));
+            }
+            return rows;
         }
         for (b, label) in page.buttons.iter().enumerate() {
             let widget = button(
@@ -3898,6 +4019,22 @@ impl OptionsUi {
                         dragging,
                     );
                 }
+                WKind::NativeSlider { label, value, mod_index, slider_index } => {
+                    let held = self.native_dragging.as_ref().filter(|(m, b, _)| m == mod_index && b == slider_index);
+                    let dragging = held.is_some();
+                    ui::slider(
+                        batch,
+                        atlas,
+                        wd.x,
+                        wd.y,
+                        wd.w,
+                        label,
+                        held.map_or(*value, |v| v.2),
+                        hover || dragging,
+                        true,
+                        dragging,
+                    );
+                }
                 WKind::Text {
                     text,
                     color,
@@ -4196,6 +4333,17 @@ impl OptionsUi {
                 *at = ui::slider_value(wd.x, wd.w, x);
                 options.set_position(name, *at);
             }
+            if let Some((mod_index, slider_index, at)) = &mut self.native_dragging
+                && let Some(wd) = widgets.iter().find(|wd| {
+                    matches!(&wd.kind, WKind::NativeSlider { mod_index: m, slider_index: b, .. } if m == mod_index && b == slider_index)
+                })
+            {
+                let value = ui::slider_value(wd.x, wd.w, x);
+                if (value - *at).abs() > 0.0001 {
+                    *at = value;
+                    events.push(Event::NativeSlider(*mod_index, *slider_index, value, false));
+                }
+            }
             if let Some(opt) = self.dragging
                 && let Some(wd) = widgets
                     .iter()
@@ -4422,7 +4570,6 @@ impl OptionsUi {
                     let at = ui::slider_value(wd.x, wd.w, x);
                     if let Some(options) = &mut s.shader_options {
                         if self.shift {
-                            // Sounds as a released slider does: no drag follows.
                             options.reset_option(&name);
                             events.extend([Event::ButtonClick, Event::Changed]);
                             break;
@@ -4430,6 +4577,11 @@ impl OptionsUi {
                         options.set_position(&name, at);
                     }
                     self.shader_dragging = Some((name, at));
+                }
+                WKind::NativeSlider { mod_index, slider_index, .. } => {
+                    let value = ui::slider_value(wd.x, wd.w, x);
+                    self.native_dragging = Some((mod_index, slider_index, value));
+                    events.push(Event::NativeSlider(mod_index, slider_index, value, false));
                 }
                 WKind::Slider { opt, .. } => {
                     self.can_change_value = true;
@@ -4465,12 +4617,13 @@ impl OptionsUi {
         if let Some(p) = &mut self.pack_screen {
             p.release();
         }
-        // AbstractSliderButton suppresses the press sound and plays once on
-        // release, even if the pointer has left the widget or its value stayed.
+        let native = self.native_dragging.take();
         let slider = self.dragging.take().is_some() | self.shader_dragging.take().is_some();
         let graphics_slider = self.graphics.release();
         let calibration_slider = self.calibration.as_mut().is_some_and(|c| c.release());
-        if slider || graphics_slider || calibration_slider {
+        if let Some((mod_index, slider_index, value)) = native {
+            vec![Event::NativeSlider(mod_index, slider_index, value, true), Event::ButtonClick]
+        } else if slider || graphics_slider || calibration_slider {
             vec![Event::ButtonClick, Event::Changed]
         } else {
             Vec::new()
@@ -5092,6 +5245,7 @@ impl OptionsUi {
             match wd.kind {
                 WKind::Button { active: true, .. }
                 | WKind::Slider { .. }
+                | WKind::NativeSlider { .. }
                 | WKind::LanguageRow { .. } => {
                     focusables.push((focus_id(i, wd), [wd.x, wd.y, wd.w, wd.h], wd.list));
                 }
@@ -6008,6 +6162,7 @@ mod tests {
             native: Some(crate::mod_list::NativePage {
                 keys: vec![["zoom".into(), "Zoom key".into(), "key.keyboard.z".into()]],
                 buttons: Vec::new(),
+                sliders: Vec::new(),
             }),
         });
         ui.show(Page::NativeMod(0));

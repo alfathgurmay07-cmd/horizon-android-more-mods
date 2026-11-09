@@ -80,9 +80,20 @@ pub fn startup_root(
     vanilla: &Path,
     selected: &[String],
     server: &[Pack],
+    punchy_enabled: bool,
 ) -> std::io::Result<PathBuf> {
+    #[cfg(target_os = "android")]
+    if punchy_enabled {
+        super::punchy::install_builtin_resource_pack(vanilla)?;
+    }
     let all = packs::discover(vanilla, &packs_dir());
-    let mut enabled = packs::enabled(&all, selected);
+    let mut ids = Vec::with_capacity(selected.len() + if punchy_enabled { 1 } else { 0 });
+    if punchy_enabled {
+        ids.push("punchy".to_owned());
+    }
+    ids.extend(selected.iter().filter(|id| id.as_str() != "punchy").cloned());
+    let all: Vec<_> = all.into_iter().filter(|pack| punchy_enabled || pack.id != "punchy").collect();
+    let mut enabled = packs::enabled(&all, &ids);
     enabled.extend_from_slice(server);
     packs::resource_root(vanilla, &enabled, &cache_dir())
 }
@@ -100,9 +111,9 @@ fn info(p: &Pack) -> PackInfo {
         },
         compat: p.compatibility,
         icon: p.icon_png().as_deref().and_then(pack_screen::load_icon),
-        required: false,
-        position: Position::Top,
-        fixed: false,
+        required: p.id == "punchy",
+        position: if p.id == "punchy" { Position::Bottom } else { Position::Top },
+        fixed: p.id == "punchy",
     }
 }
 /// A pack from `DownloadedPackSource.loadRequestedPacks`: fixed at the top of
@@ -150,10 +161,17 @@ fn vanilla_info(vanilla: &Path) -> PackInfo {
 }
 /// Packs the Resource Packs screen lists: folder and built-in packs, then any
 /// active downloaded server (or world) packs, then vanilla.
-pub(super) fn pack_infos(vanilla: &Path, server: &[Pack]) -> Vec<PackInfo> {
+pub(super) fn pack_infos(vanilla: &Path, server: &[Pack], punchy_enabled: bool) -> Vec<PackInfo> {
+    #[cfg(target_os = "android")]
+    if punchy_enabled {
+        if let Err(error) = super::punchy::install_builtin_resource_pack(vanilla) {
+            log::warn!("Horizon: could not install Punchy built-in resource pack: {error}");
+        }
+    }
     let mut infos: Vec<PackInfo> = packs::discover(vanilla, &packs_dir())
-        .iter()
-        .map(info)
+        .into_iter()
+        .filter(|pack| punchy_enabled || pack.id != "punchy")
+        .map(|pack| info(&pack))
         .collect();
     infos.extend(server.iter().map(downloaded_info));
     infos.push(vanilla_info(vanilla));
@@ -170,7 +188,7 @@ impl Game<'_> {
     /// The packs the pack screen offers and the current selection
     /// (`PackSelectionScreen` makes its `PackSelectionModel` from them).
     pub(super) fn refresh_pack_lists(&mut self) {
-        let infos = pack_infos(&self.vanilla_root(), &self.server_packs.active);
+        let infos = pack_infos(&self.vanilla_root(), &self.server_packs.active, self.settings.mods.enabled.contains("punchy"));
         let o = &mut self.ui.options;
         o.pack_infos = infos;
         o.pack_selection = self.settings.resource_packs.clone();
@@ -413,7 +431,7 @@ pub(super) fn stage_pack(
     japanese: bool,
     progress: &super::Progress,
 ) -> horizon_client::Result<StagedPack> {
-    let root = startup_root(vanilla_root, selected, server)?;
+    let root = startup_root(vanilla_root, selected, server, mods_enabled.contains("punchy"))?;
     let root = super::mods::content_root(&root, mods_enabled, dev_mods);
     progress.set(1);
     // The world's models and sprites and the GUI atlas read the same root and nothing of

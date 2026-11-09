@@ -1,7 +1,6 @@
 //! Punchy 3.1b animation data semantics, recovered from its shipped JVM classes.
 //! Source anchors: PunchyAnimationLoader, AnimationExpression, KeyEasing,
 //! PoseHandler's sample*Channel and quaternion helpers, AnimationSoundCursor.
-//! Authored resource files are inputs; this crate contains no bundled Punchy assets.
 use glam::{EulerRot, Mat4, Quat, Vec3};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};

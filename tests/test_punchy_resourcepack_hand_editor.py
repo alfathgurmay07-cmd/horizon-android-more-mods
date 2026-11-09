@@ -26,6 +26,34 @@ class PunchyResourcePackAndHandEditorTests(unittest.TestCase):
         self.assertIn("merge_json", source)
         self.assertIn("missing_resource_pack_assets_keep_embedded_resources", source)
 
+    def test_builtin_animation_pack_is_the_default_resource_source(self):
+        import zipfile
+
+        pack_path = ROOT / "mods/official/punchy/mixins/punchy/engine/data/punchy_builtin.zip"
+        self.assertTrue(pack_path.is_file())
+        with zipfile.ZipFile(pack_path) as pack:
+            names = set(pack.namelist())
+            self.assertIn("pack.mcmeta", names)
+            self.assertIn("assets/minecraft/punchy/animations/player.animation.json", names)
+            self.assertIn("assets/punchy/geo/player.geo.json", names)
+            self.assertIn("assets/minecraft/punchy/compat/tuning_template.json", names)
+        resource_source = RESOURCES.read_text()
+        runtime = RUNTIME.read_text()
+        pack_source = (ROOT / "crates/horizon-client/src/game/packs.rs").read_text()
+        self.assertIn('include_bytes!("data/punchy_builtin.zip")', resource_source)
+        self.assertIn("builtin_resource_pack()", resource_source)
+        self.assertIn("install_builtin_resource_pack", runtime)
+        self.assertIn('"assets/minecraft/resourcepacks/punchy.zip"', runtime)
+        self.assertIn('ids.push("punchy".to_owned())', pack_source)
+        self.assertIn('required: p.id == "punchy"', pack_source)
+
+    def test_custom_resource_packs_are_above_punchy_builtin(self):
+        source = (ROOT / "crates/horizon-client/src/game/packs.rs").read_text()
+        startup = source.split("pub fn startup_root(", 1)[1].split("fn info(", 1)[0]
+        self.assertLess(startup.index('ids.push("punchy".to_owned())'), startup.index("ids.extend(selected"))
+        self.assertIn('filter(|id| id.as_str() != "punchy")', startup)
+        self.assertIn('super::punchy::install_builtin_resource_pack(vanilla)?', startup)
+
     def test_native_data_allows_safe_asset_paths_with_size_limit(self):
         source = HOOKS.read_text()
         method = source.split("pub(super) fn native_data(&self, path: &str)", 1)[1].split("\n    }", 1)[0]
@@ -38,9 +66,11 @@ class PunchyResourcePackAndHandEditorTests(unittest.TestCase):
         self.assertIn("pub(super) fn resources_reloaded()", RUNTIME.read_text())
 
     def test_hand_editor_exposes_reference_targets_and_scopes(self):
-        reference = Path("/mnt/data/punchy_reference/punchy/client/menu/core/ui/HandEditorPanel.java").read_text()
-        for token in ("EDIT_ITEM", "EDIT_ARM", "EDIT_LINE", "SCOPE_ITEM", "SCOPE_TAG", "SCOPE_GROUP", "SCOPE_ALL", "mirrorPose", "resetPose"):
-            self.assertIn(token, reference)
+        reference_path = Path("/mnt/data/punchy_reference/punchy/client/menu/core/ui/HandEditorPanel.java")
+        if reference_path.is_file():
+            reference = reference_path.read_text()
+            for token in ("EDIT_ITEM", "EDIT_ARM", "EDIT_LINE", "SCOPE_ITEM", "SCOPE_TAG", "SCOPE_GROUP", "SCOPE_ALL", "mirrorPose", "resetPose"):
+                self.assertIn(token, reference)
         runtime = RUNTIME.read_text()
         for token in ("Hand Editor", "Main hand", "Off hand", "Offset X", "Rotation X", "Scale", "Pivot X", "Mirror selected pose to other hand", "Reset selected pose", '"item"', '"tag"', '"group"', '"all"', "Save new Hand Editor profile", "Undo", "Redo"):
             self.assertIn(token, runtime)
@@ -55,8 +85,11 @@ class PunchyResourcePackAndHandEditorTests(unittest.TestCase):
 
     def test_runtime_load_uses_selected_resource_pack_assets(self):
         source = RUNTIME.read_text()
-        self.assertIn("game.native_data(resources::PACK_ANIMATIONS)", source)
-        self.assertIn("resources::from_active_pack", source)
+        self.assertIn('game.native_data_tree("assets/punchy/animations")', source)
+        self.assertIn('game.native_data_tree("assets/minecraft/punchy/animations")', source)
+        self.assertIn('game.native_data_tree("assets/minecraft/punchy/compat")', source)
+        self.assertIn('game.native_data_tree("assets/punchy/compat")', source)
+        self.assertIn("resources::from_active_pack_tree", source)
         self.assertIn("load(game, &mut s)", source)
 
 

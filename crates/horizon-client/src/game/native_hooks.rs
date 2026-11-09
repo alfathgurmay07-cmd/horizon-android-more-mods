@@ -295,7 +295,7 @@ use horizon_client::{
     items::ItemStack,
     keybinds,
     mobs::{Damage, Who},
-    mod_list::{self, Installed, NativePage},
+    mod_list::{self, Installed, NativePage, NativeSlider},
     particles::{ParticleOptions, ParticleType},
     text::Text,
 };
@@ -1386,10 +1386,18 @@ impl Game<'_> {
         super::android_bundled::native_settings(self, mod_id, buttons);
         let _ = (mod_id, buttons);
     }
+    pub(super) fn native_settings_sliders(&mut self, mod_id: &str, sliders: &mut Vec<NativeSlider>) {
+        super::android_bundled::native_settings_sliders(self, mod_id, sliders);
+        let _ = (mod_id, sliders);
+    }
     /// Button `button` of mod `mod_id`'s settings page was clicked.
     pub(super) fn native_settings_click(&mut self, mod_id: &str, button: usize) {
         super::android_bundled::native_settings_click(self, mod_id, button);
         let _ = (mod_id, button);
+    }
+    pub(super) fn native_settings_slider(&mut self, mod_id: &str, slider: usize, value: f32, finished: bool) {
+        super::android_bundled::native_settings_slider(self, mod_id, slider, value, finished);
+        let _ = (mod_id, slider, value, finished);
     }
     /// The player did `event` on mod `mod_id`'s panel (`native_panel_items`):
     /// act on it when it is yours. API 2.
@@ -3360,6 +3368,58 @@ impl Game<'_> {
         }
         fs::read(file).ok()
     }
+    pub(super) fn native_data_tree(&self, prefix: &str) -> Vec<(String, Vec<u8>)> {
+        const MAX_FILES: usize = 512;
+        const MAX_DEPTH: usize = 12;
+        const MAX_TOTAL: u64 = 64 * 1024 * 1024;
+        let plain = |part: &str| !part.is_empty() && part != "." && part != ".." && !part.contains('\\');
+        if !(prefix.starts_with("assets/") || prefix.starts_with("data/"))
+            || !prefix.split('/').all(plain)
+        {
+            return Vec::new();
+        }
+
+        let root = self.options.resources.join(prefix);
+        let mut pending = vec![(root, 0usize)];
+        let mut files = Vec::new();
+        let mut total = 0u64;
+        while let Some((directory, depth)) = pending.pop() {
+            if depth > MAX_DEPTH || files.len() >= MAX_FILES || total >= MAX_TOTAL {
+                break;
+            }
+            let Ok(entries) = fs::read_dir(&directory) else { continue };
+            let mut entries: Vec<_> = entries.filter_map(Result::ok).collect();
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let Ok(kind) = entry.file_type() else { continue };
+                let path = entry.path();
+                if kind.is_dir() {
+                    if depth < MAX_DEPTH {
+                        pending.push((path, depth + 1));
+                    }
+                    continue;
+                }
+                if !kind.is_file()
+                    || path.extension().and_then(|e| e.to_str()) != Some("json")
+                    || files.len() >= MAX_FILES
+                    || total >= MAX_TOTAL
+                {
+                    continue;
+                }
+                let Ok(size) = fs::metadata(&path).map(|m| m.len()) else { continue };
+                if size > 32 * 1024 * 1024 || total.saturating_add(size) > MAX_TOTAL {
+                    continue;
+                }
+                let Ok(bytes) = fs::read(&path) else { continue };
+                let Ok(relative) = path.strip_prefix(&self.options.resources) else { continue };
+                let relative = relative.to_string_lossy().replace('\\', "/");
+                total += bytes.len() as u64;
+                files.push((relative, bytes));
+            }
+        }
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        files
+    }
     /// The block at `pos` (`mymod:cable`; air where nothing is loaded).
     /// API 20.
     pub(super) fn native_block(&self, pos: [i32; 3]) -> String {
@@ -4343,10 +4403,13 @@ impl Game<'_> {
             .retain(|row| row.native.is_none() && !mods.iter().any(|m| m.id == row.id));
         for m in mods {
             let mut buttons = Vec::new();
+            let mut sliders = Vec::new();
             self.native_settings(&m.id, &mut buttons);
+            self.native_settings_sliders(&m.id, &mut sliders);
             let page = NativePage {
                 keys: m.keys,
                 buttons,
+                sliders,
             };
             self.settings.mods.installed.push(Installed {
                 id: m.id,
@@ -4368,6 +4431,13 @@ impl Game<'_> {
         self.native_settings_click(&id, button);
         self.native_settings_refresh(i);
     }
+    pub(super) fn native_settings_slider_event(&mut self, i: usize, slider: usize, value: f32, finished: bool) {
+        let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) else {
+            return;
+        };
+        self.native_settings_slider(&id, slider, value, finished);
+        self.native_settings_refresh(i);
+    }
     /// Native mod `i`'s page opened: its labels asked again, so that they
     /// follow the language (and the mod's state) since the list was made.
     pub(super) fn native_settings_refresh(&mut self, i: usize) {
@@ -4375,10 +4445,13 @@ impl Game<'_> {
             return;
         };
         let mut buttons = Vec::new();
+        let mut sliders = Vec::new();
         self.native_settings(&id, &mut buttons);
+        self.native_settings_sliders(&id, &mut sliders);
         let row = self.settings.mods.installed.get_mut(i);
         if let Some(page) = row.and_then(|m| m.native.as_mut()) {
             page.buttons = buttons;
+            page.sliders = sliders;
         }
     }
     /// A key event for `native_key`.

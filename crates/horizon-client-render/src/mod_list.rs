@@ -106,11 +106,19 @@ pub struct Installed {
 
 /// A native mod's settings page: its keys as Key Binds rows, then its
 /// buttons. The keys the player chooses are kept in `ModList::keys`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NativeSlider {
+    pub section: String,
+    pub label: String,
+    pub value: f32,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NativePage {
     /// Each key's name, label and default key (`key.keyboard.z`).
     pub keys: Vec<[String; 3]>,
     pub buttons: Vec<String>,
+    pub sliders: Vec<NativeSlider>,
 }
 
 impl ModList {

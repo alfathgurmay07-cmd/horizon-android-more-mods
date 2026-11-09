@@ -297,6 +297,22 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
     }
 }
 
+pub(super) fn native_settings_sliders(game: &Game<'_>, mod_id: &str, sliders: &mut Vec<crate::mod_list::NativeSlider>) {
+    let _ = (&game, &mod_id, &sliders);
+    #[cfg(target_os = "android")]
+    if mod_id == super::punchy::ID {
+        super::punchy::sliders(game, sliders);
+    }
+}
+
+pub(super) fn native_settings_slider(game: &mut Game<'_>, mod_id: &str, slider: usize, value: f32, finished: bool) {
+    let _ = (&game, &mod_id, &slider, &value, &finished);
+    #[cfg(target_os = "android")]
+    if mod_id == super::punchy::ID {
+        super::punchy::slider(&*game, slider, value, finished);
+    }
+}
+
 pub(super) fn native_settings_click(game: &mut Game<'_>, mod_id: &str, button: usize) {
     let _ = (&game, &mod_id, &button);
     #[cfg(target_os = "android")]

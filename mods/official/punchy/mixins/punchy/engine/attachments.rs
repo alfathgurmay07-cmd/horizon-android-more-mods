@@ -262,6 +262,28 @@ mod tests {
         assert!((r.item.determinant() - 1.).abs() < 1e-5);
     }
     #[test]
+    fn pickaxe_inspect_moves_the_item_through_the_matching_hand_grip() {
+        let resources = crate::resources::embedded().unwrap();
+        let skeleton = Skeleton::new(&resources.bones).unwrap();
+        let clips = crate::load_clips(&resources.animations).unwrap();
+        let transform = Transform::default();
+        for (name, left, grip) in [
+            ("new_inspect_pickaxe_left", true, "itemgrip_left"),
+            ("new_inspect_pickaxe_right", false, "itemgrip_right"),
+        ] {
+            let clip = &clips[name];
+            assert!(clip.tracks.contains_key(grip));
+            let rest = sample_frame(&skeleton, left, None, 1., true);
+            let inspected = sample_frame(&skeleton, left, Some((clip, 0.25, 0.25)), 1., true);
+            assert!((inspected.grip_delta - rest.grip_delta).length() > 0.001
+                || !inspected.grip_rotation.abs_diff_eq(rest.grip_rotation, 0.001));
+            let rest_pose = attach(rest, left, &transform, &transform, 1., 1., false);
+            let inspected_pose = attach(inspected, left, &transform, &transform, 1., 1., false);
+            assert!(!inspected_pose.item.abs_diff_eq(rest_pose.item, 0.001));
+        }
+    }
+
+    #[test]
     fn unowned_arm_keeps_shared_body_motion_without_its_arm_or_grip_track() {
         let resources = crate::resources::embedded().unwrap();
         let skeleton = Skeleton::new(&resources.bones).unwrap();

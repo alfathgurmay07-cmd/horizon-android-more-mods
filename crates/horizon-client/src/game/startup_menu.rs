@@ -431,7 +431,7 @@ pub(super) fn spawn_loader(
         .name("resource-loader".into())
         .spawn(move || {
             let mut pack_error = None;
-            let root = packs::startup_root(&vanilla_root, &settings.resource_packs, &[])
+            let root = packs::startup_root(&vanilla_root, &settings.resource_packs, &[], settings.mods.enabled.contains("punchy"))
                 .unwrap_or_else(|error| {
                     pack_error = Some(error.to_string());
                     vanilla_root.clone()
@@ -596,7 +596,7 @@ impl Loading {
             self.menu.options.languages = horizon_client::lang::available(&[&self.menu.root]);
         }
         if self.menu.options.pack_infos.is_empty() || page == Page::Packs {
-            self.menu.options.pack_infos = packs::pack_infos(&self.vanilla_root, &[]);
+            self.menu.options.pack_infos = packs::pack_infos(&self.vanilla_root, &[], self.settings.mods.enabled.contains("punchy"));
         }
         self.menu.options.pack_selection = self.settings.resource_packs.clone();
         self.menu.options.pack_screen = None;
@@ -703,7 +703,7 @@ impl Loading {
                     &mut self.menu.narrator_toast,
                 ),
                 // Mods' settings pages open only in a running game.
-                Event::ModSettings(_) | Event::NativeSettings(_) | Event::NativeButton(..) => {}
+                Event::ModSettings(_) | Event::NativeSettings(_) | Event::NativeButton(..) | Event::NativeSlider(..) => {}
                 // The startup menu runs before the game opens a control socket.
                 Event::ButtonClick => {
                     #[cfg(target_os = "android")]
@@ -821,7 +821,7 @@ impl Loading {
         if let Some(notice) = crate::documents::poll() {
             if notice.changed {
                 if let Some(opts) = self.options.as_ref() {
-                    self.menu.options.pack_infos = packs::pack_infos(&opts.resources, &[]);
+                    self.menu.options.pack_infos = packs::pack_infos(&opts.resources, &[], self.settings.mods.enabled.contains("punchy"));
                 }
                 self.menu.options.pack_screen = None;
                 self.settings.shader_packs =
