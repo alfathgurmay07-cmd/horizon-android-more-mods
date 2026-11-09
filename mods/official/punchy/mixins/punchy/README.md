@@ -12,7 +12,7 @@ Dit is **geen volledige port van Punchy 3.1b**. De originele JAR is geïnventari
 
 ## Grenzen
 
-De volledige editor, profiel- en packmixing, alle samengestelde handovergangen, locomotion, derde persoon, itemmodelsystemen, physics, overlays, particles en compatibiliteitslagen ontbreken of zijn slechts gedeeltelijk onderzocht/geport. De consume/mining-v2-fasecontrollers zijn nu gekoppeld aan de client: start, herhaling en einde zijn in een tijdelijke spelwereld getest voor eten, drinken en mijnen. Complexe equip-/offhandsnapshots en alle onderbrekingscombinaties vereisen nog aanvullende validatie. De geluidscursor is getest; de adapter speelt de oorspronkelijke animatiegeluiden nog niet af. De adapter bewaart nu doorlopende uitgaande animaties bij onderbrekingen en mengt de lokale bottransformaties vóór de aanhechtingsketen. Volledige overeenkomst met alle PoseHandler-overlap/rebasevarianten is nog niet bewezen. De UI toont alleen previewinstellingen. De afspeelsnelheid volgt de expliciete equip-/consume-/timeline-regels uit PoseHandler; eenvoudige numerieke tests dekken de grensgevallen.
+De originele Fabric-editor is niet één-op-één overgezet: Android heeft een native touch-editor met Item/Arm/Line-targets, Item/Tag/Group/All-scopes, transforms, custom groups, lokale profielen, JSON-import/export en undo/redo, maar mist onder meer de originele visuele slider-layout en handmatige naamgeving van groepen/profielen. Resource-packanimaties, geometrie en tuning worden op Android over de ingebouwde defaults gemengd; compatibiliteitslagen buiten deze assets zijn niet volledig geport. Alle samengestelde handovergangen, locomotion, third-person player rendering, volledige itemmodelsystemen, physics, overlays, particles en compatibiliteitslagen ontbreken of zijn slechts gedeeltelijk onderzocht/geport. De consume/mining-v2-fasecontrollers zijn gekoppeld aan de client. Complexe equip-/offhandsnapshots en alle onderbrekingscombinaties vereisen nog aanvullende validatie. De geluidscursor is getest; de adapter speelt de oorspronkelijke animatiegeluiden nog niet af. De adapter bewaart nu doorlopende uitgaande animaties bij onderbrekingen en mengt de lokale bottransformaties vóór de aanhechtingsketen. Volledige overeenkomst met alle PoseHandler-overlap/rebasevarianten is nog niet bewezen. De afspeelsnelheid volgt de expliciete equip-/consume-/timeline-regels uit PoseHandler; eenvoudige numerieke tests dekken de grensgevallen.
 
 De standaardrenderer gebruikt nu de herstelde skelethiërarchie. 128 matrixvergelijkingen met de oorspronkelijke Java-klasse controleren de transformaties, inclusief legacygrips met shear. Dit bewijst nog niet de volledige zichtbare gamepipeline: volledige armownership, procedurele beweging en alle speciale itemrenderers ontbreken. Het pakket heet daarom bewust `punchy-rust-preview-0.1.2.hnmod`.
 
@@ -35,7 +35,7 @@ Het zelfstandige native pakket staat in `dist/punchy-rust-preview-0.1.2.hnmod` v
 
 Installeer dit ene `.hnmod`-pakket in de bedoelde Horizon-instance en laat de launcher de native build maken. Dit is de normale bouwstap voor Horizon-native mods; er zijn geen aanvullende bestanden of runtimes nodig. De gegevens worden in de gamebinary ingebouwd, dus er hoeft ook geen losse datamap naast de game te blijven staan.
 
-Android Options → Mods gebruikt de Punchy-modrij als enige ON/OFF-schakelaar; de instellingenpagina bevat snelheid, reload en de keuze tussen Punchy- en Horizon-handposes. F6 inspecteert; F7 herlaadt de ingebouwde animaties. Beide toetsen zijn in de modinstellingen te wijzigen.
+Options → Mods → Punchy Rust toont de previewschakelaar, snelheid, reload en de keuze tussen Punchy- en Horizon-handposes. F6 inspecteert; F7 herlaadt de ingebouwde animaties. Beide toetsen zijn in de modinstellingen te wijzigen.
 
 De animatiegegevens zijn afkomstig uit het voor deze lokale port aangeleverde Punchy 3.1b-bestand; `LICENSE-Punchy` bewaart de oorspronkelijke vermelding. De rendereradapter bevat Horizon MIT-code; zie `LICENSE-Horizon`.
 
@@ -57,3 +57,34 @@ De Java-oracle voert alleen oorspronkelijke wiskunde-/expressie-/geluidscursorkl
 De native compilecontrole gebruikt een aparte export in `build/punchy-source` en een gegenereerde stage `build/punchy-stage`. Upstream-bron en echte spelerdata zijn niet aangepast. Op macOS moet `horizon-mixins apply` naar een nieuwe outputmap schrijven; atomische vervanging van een bestaande stage wordt door deze toolversie geweigerd.
 
 De grafische smoke-test staat in `tools/runtime_smoke.py`; deze gebruikt geen Punchy-JAR en start met nieuwe tijdelijke game-/launcher-/XDG-mappen en bewaart zijn checks en screenshots in de gekozen rapportmap. Zie `reports/punchy/coverage.md`, `runtime-smoke.json`, `rust-tests.log` en `math-parity.log` voor de uitgevoerde controles en hun grenzen.
+
+## Android resource packs and Hand Editor
+
+The Android runtime reads Punchy animation, third-person animation, geometry and
+tuning assets from the active resource-pack overlay. Supported locations are
+`assets/minecraft/punchy/animations/player.animation.json`,
+`assets/punchy/animations/player_3_p.animation.json`,
+`assets/minecraft/punchy/animations/player_3_p.animation.json` (fallback),
+`assets/punchy/geo/player.geo.json`, and
+`assets/minecraft/punchy/compat/tuning_template.json`. Missing files and clips
+fall back to the bundled Punchy defaults. Resource reload invalidates the cache
+and reloads the active overlay.
+
+Options → Mods → Punchy provides a touch-friendly Hand Editor for the held main
+or off hand. It supports Item, Arm and Fishing Line targets; Item, Tag, Group and
+All scopes; per-side offset, rotation, scale and pivot; mirror; reset; custom
+group membership; profiles; and undo/redo. Fishing Line editing is limited to
+the fishing-rod item scope, matching the original editor's target constraints.
+Edits layer over resource-pack tuning and are stored in
+`horizon-mods/.horizon-mod-data/punchy/hand_editor.json`.
+
+Profiles are saved locally in the editor. The Export action writes
+`hand_editor_export.json` in the same Punchy data folder. To import, place the
+exported JSON payload as `hand_editor_import.json` in that folder, then tap
+Import in the Hand Editor. Export/import payloads contain the `items`, `rules`
+and `groups` objects.
+
+The Android editor is adapted to Horizon's native touch settings page and does
+not reproduce the original Fabric Swing layout. Custom groups are created by
+adding the currently held item to the selected group; group names are generated
+automatically on Android.

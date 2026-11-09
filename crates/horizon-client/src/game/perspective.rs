@@ -243,6 +243,10 @@ impl Game<'_> {
     /// position, yaw and pitch to render from.
     pub(super) fn camera_view(&mut self, partial: f32) -> Option<(glam::DVec3, f32, f32)> {
         #[cfg(target_os = "android")]
+        if let std::ops::ControlFlow::Break(view) = super::freecam_hooks::camera(partial) {
+            return view;
+        }
+        #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(view) = super::freelook_hooks::camera(self, partial) {
             return view;
         }
@@ -533,6 +537,13 @@ impl Game<'_> {
     /// The model's old pitch is the player's `xRotO`, which the turn moves
     /// with `xRot` (`turn_rotation`).
     pub(super) fn turn_player(&mut self, xo: f64, yo: f64) {
+        #[cfg(target_os = "android")]
+        if matches!(
+            super::freecam_hooks::turn(xo, yo),
+            std::ops::ControlFlow::Break(())
+        ) {
+            return;
+        }
         let pitch_o = self.player_model.as_ref().map(|m| m.previous_head_pitch);
         let rotation = turn_rotation(self.yaw, self.pitch, pitch_o, xo, yo);
         self.yaw = rotation.y_rot;

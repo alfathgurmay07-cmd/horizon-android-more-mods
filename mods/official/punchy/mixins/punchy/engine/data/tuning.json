@@ -783,6 +783,10 @@
         {
           "type": "use_bow",
           "name": "use_bow"
+        },
+        {
+          "type": "use_bow_shot",
+          "name": "use_bow_shoot"
         }
       ],
       "transforms": {
@@ -3188,6 +3192,22 @@
           "start": "new_mining_st_start",
           "looping": "new_mining_st_loop",
           "end": "new_mining_st_end"
+        },
+        {
+          "type": "use_trident",
+          "name": "use_trident"
+        },
+        {
+          "type": "use_trident_throw",
+          "name": "use_trident_throw"
+        },
+        {
+          "type": "use_trident_throw_riptide",
+          "name": "use_trident_throw_riptide"
+        },
+        {
+          "type": "use_trident_throw_loyalty",
+          "name": "use_trident_throw_loyalty"
         }
       ]
     },

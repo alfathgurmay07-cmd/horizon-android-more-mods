@@ -37,7 +37,243 @@ struct State {
     tuning: Option<punchy_engine::tuning::Tuning>,
     status: String,
     render_count: u64,
+    resource_source: String,
+    editor: HandEditor,
 }
+#[derive(Clone, Debug)]
+struct HandEditor {
+    selected_hand: usize,
+    selected_target: String,
+    selected_scope: String,
+    selected_selector: String,
+    items: serde_json::Value,
+    rules: Vec<serde_json::Value>,
+    groups: serde_json::Value,
+    profiles: Vec<serde_json::Value>,
+    profile_index: usize,
+    undo: Vec<serde_json::Value>,
+    redo: Vec<serde_json::Value>,
+}
+impl Default for HandEditor {
+    fn default() -> Self {
+        Self {
+            selected_hand: 0,
+            selected_target: "item".into(),
+            selected_scope: "item".into(),
+            selected_selector: String::new(),
+            items: serde_json::json!({}),
+            rules: Vec::new(),
+            groups: serde_json::json!({}),
+            profiles: Vec::new(),
+            profile_index: 0,
+            undo: Vec::new(),
+            redo: Vec::new(),
+        }
+    }
+}
+impl HandEditor {
+    fn parse(raw: Option<String>) -> Self {
+        let Some(raw) = raw else { return Self::default() };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else { return Self::default() };
+        Self {
+            selected_hand: value.get("selected_hand").and_then(|v| v.as_u64()).unwrap_or(0).min(1) as usize,
+            selected_target: value.get("selected_target").and_then(|v| v.as_str()).filter(|v| matches!(*v, "item" | "arm" | "line")).unwrap_or("item").to_owned(),
+            selected_scope: value.get("selected_scope").and_then(|v| v.as_str()).filter(|v| matches!(*v, "item" | "tag" | "group" | "all")).unwrap_or("item").to_owned(),
+            selected_selector: value.get("selected_selector").and_then(|v| v.as_str()).unwrap_or_default().to_owned(),
+            items: value.get("items").cloned().filter(serde_json::Value::is_object).unwrap_or_else(|| serde_json::json!({})),
+            rules: value.get("rules").and_then(|v| v.as_array()).cloned().unwrap_or_default(),
+            groups: value.get("groups").cloned().filter(serde_json::Value::is_object).unwrap_or_else(|| serde_json::json!({})),
+            profiles: value.get("profiles").and_then(|v| v.as_array()).cloned().unwrap_or_default(),
+            profile_index: value.get("profile_index").and_then(|v| v.as_u64()).unwrap_or(0) as usize,
+            undo: value.get("undo").and_then(|v| v.as_array()).cloned().unwrap_or_default(),
+            redo: value.get("redo").and_then(|v| v.as_array()).cloned().unwrap_or_default(),
+        }
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::json!({"items":self.items,"rules":self.rules,"groups":self.groups})
+    }
+    fn restore(&mut self, snapshot: &serde_json::Value) {
+        self.items = snapshot.get("items").cloned().filter(serde_json::Value::is_object).unwrap_or_else(|| serde_json::json!({}));
+        self.rules = snapshot.get("rules").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        self.groups = snapshot.get("groups").cloned().filter(serde_json::Value::is_object).unwrap_or_else(|| serde_json::json!({}));
+    }
+    fn remember(&mut self) {
+        if self.undo.len() >= 24 { self.undo.remove(0); }
+        let snapshot = self.snapshot();
+        self.undo.push(snapshot);
+        self.redo.clear();
+    }
+    fn save(&self, game: &Game<'_>) {
+        let value = serde_json::json!({
+            "selected_hand": self.selected_hand,
+            "selected_target": self.selected_target,
+            "selected_scope": self.selected_scope,
+            "selected_selector": self.selected_selector,
+            "items": self.items,
+            "rules": self.rules,
+            "groups": self.groups,
+            "profiles": self.profiles,
+            "profile_index": self.profile_index,
+            "undo": self.undo,
+            "redo": self.redo,
+        });
+        if let Ok(raw) = serde_json::to_string_pretty(&value) {
+            game.native_set_setting(ID, "hand_editor.json", &raw);
+        }
+    }
+    fn transform_mut(&mut self, item: &str, left: bool, target: &str, scope: &str, selector: &str) -> &mut serde_json::Value {
+        if scope == "item" {
+            let side = if left { "left" } else { "right" };
+            let root = self.items.as_object_mut().expect("editor items are an object");
+            let entry = root.entry(item.to_owned()).or_insert_with(|| serde_json::json!({}));
+            let side = entry.as_object_mut().expect("editor item is an object").entry(side).or_insert_with(|| serde_json::json!({}));
+            return side.as_object_mut().expect("editor side is an object").entry(target.to_owned()).or_insert_with(|| serde_json::json!({}));
+        }
+        let side = if left { "left" } else { "right" };
+        if let Some(index) = self.rules.iter().position(|rule| {
+            rule.get("scope").and_then(|v|v.as_str()) == Some(scope)
+                && rule.get("selector").and_then(|v|v.as_str()).unwrap_or_default() == selector
+                && rule.get("side").and_then(|v|v.as_str()) == Some(side)
+                && rule.get("target").and_then(|v|v.as_str()) == Some(target)
+        }) {
+            return self.rules[index].get_mut("transform").expect("editor rule has a transform");
+        }
+        self.rules.push(serde_json::json!({"scope":scope,"selector":selector,"side":side,"target":target,"transform":{}}));
+        self.rules.last_mut().unwrap().get_mut("transform").unwrap()
+    }
+}
+
+fn held_item_id(game: &Game<'_>, hand: usize) -> String {
+    let stack = if hand == 0 { game.held() } else { game.offhand.as_ref() };
+    stack.map_or_else(|| "minecraft:air".to_owned(), |v| v.item.to_string())
+}
+fn editor_left(game: &Game<'_>, hand: usize) -> bool {
+    game.settings.main_hand_left != (hand == 1)
+}
+fn held_tags(game: &Game<'_>, item: &str) -> Vec<String> {
+    game.items().item_tags.iter()
+        .filter(|(_, members)| members.contains(item))
+        .map(|(tag, _)| tag.clone())
+        .collect()
+}
+fn custom_group_names(state: &State) -> Vec<String> {
+    let mut names = Vec::new();
+    if let Some(groups) = state.editor.groups.as_object() {
+        names.extend(groups.keys().cloned());
+    }
+    if let Some(groups) = state.tuning.as_ref().and_then(|t| t.document.get("customGroups")).and_then(serde_json::Value::as_array) {
+        names.extend(groups.iter().filter_map(|g| g.get("name").and_then(|v|v.as_str()).map(str::to_owned)));
+    }
+    names.sort();
+    names.dedup();
+    names
+}
+fn selector_choices(game: &Game<'_>, state: &State, item: &str) -> Vec<String> {
+    match state.editor.selected_scope.as_str() {
+        "tag" => held_tags(game, item),
+        "group" => custom_group_names(state),
+        "all" => vec!["*".into()],
+        _ => vec![item.to_owned()],
+    }
+}
+fn selector_members(state: &State, name: &str) -> Vec<String> {
+    let mut members = state.editor.groups.get(name).and_then(serde_json::Value::as_array)
+        .map(|v|v.iter().filter_map(|x|x.as_str().map(str::to_owned)).collect::<Vec<_>>()).unwrap_or_default();
+    if members.is_empty() {
+        if let Some(groups) = state.tuning.as_ref().and_then(|t|t.document.get("customGroups")).and_then(serde_json::Value::as_array) {
+            if let Some(group) = groups.iter().find(|g|g.get("name").and_then(|v|v.as_str()) == Some(name)) {
+                members = group.get("items").and_then(serde_json::Value::as_array)
+                    .map(|v|v.iter().filter_map(|x|x.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+            }
+        }
+    }
+    members
+}
+fn selector_matches(selector: &str, item: &str, tags: &[String]) -> bool {
+    if let Some(tag) = selector.strip_prefix('#') {
+        tags.iter().any(|t| t.as_str() == tag)
+    } else if selector.starts_with("minecraft:") || selector.contains(':') {
+        selector == item
+    } else {
+        false
+    }
+}
+fn group_matches(state: &State, selector: &str, item: &str, tags: &[String]) -> bool {
+    selector_members(state, selector).iter().any(|member| selector_matches(member, item, tags))
+}
+fn transform_component(transform: &punchy_engine::tuning::Transform, key: &str) -> f32 {
+    match key {
+        "scale" => transform.scale,
+        "offX" => transform.offset[0], "offY" => transform.offset[1], "offZ" => transform.offset[2],
+        "rotX" => transform.rotation[0], "rotY" => transform.rotation[1], "rotZ" => transform.rotation[2],
+        "pivotX" => transform.pivot[0], "pivotY" => transform.pivot[1], "pivotZ" => transform.pivot[2],
+        _ => 0.0,
+    }
+}
+fn set_transform_component(transform: &mut punchy_engine::tuning::Transform, key: &str, value: f32) {
+    match key {
+        "scale" => transform.scale = value,
+        "offX" => transform.offset[0] = value, "offY" => transform.offset[1] = value, "offZ" => transform.offset[2] = value,
+        "rotX" => transform.rotation[0] = value, "rotY" => transform.rotation[1] = value, "rotZ" => transform.rotation[2] = value,
+        "pivotX" => transform.pivot[0] = value, "pivotY" => transform.pivot[1] = value, "pivotZ" => transform.pivot[2] = value,
+        _ => {}
+    }
+}
+fn transform_value(transform: &punchy_engine::tuning::Transform) -> serde_json::Value {
+    serde_json::json!({"scale":transform.scale,"offX":transform.offset[0],"offY":transform.offset[1],"offZ":transform.offset[2],
+        "rotX":transform.rotation[0],"rotY":transform.rotation[1],"rotZ":transform.rotation[2],
+        "pivotX":transform.pivot[0],"pivotY":transform.pivot[1],"pivotZ":transform.pivot[2]})
+}
+fn apply_transform_json(base: &mut punchy_engine::tuning::Transform, values: &serde_json::Value) {
+    if let Some(values) = values.as_object() {
+        for (key, value) in values {
+            if let Some(number) = value.as_f64().filter(|n| n.is_finite()) {
+                set_transform_component(base, key, number as f32);
+            }
+        }
+    }
+}
+fn editor_base_transform(state: &State, item: &str, left: bool, arm: bool, tags: &[String]) -> punchy_engine::tuning::Transform {
+    let refs = tags.iter().map(String::as_str).collect::<Vec<_>>();
+    let context = punchy_engine::tuning::ItemContext { id: item, tags: &refs, ..Default::default() };
+    state.tuning.as_ref().and_then(|t|t.transform_for(&context,left,arm)).unwrap_or_default()
+}
+fn editor_transform(
+    state: &State, item: &str, left: bool, target: &str, tags: &[String],
+) -> punchy_engine::tuning::Transform {
+    let arm = target == "arm";
+    let mut base = if target == "line" { punchy_engine::tuning::Transform::default() }
+        else { editor_base_transform(state,item,left,arm,tags) };
+    let side = if left { "left" } else { "right" };
+    for scope in ["all", "group", "tag", "item"] {
+        if scope == "item" {
+            if let Some(values) = state.editor.items.get(item).and_then(|v|v.get(side)).and_then(|v|v.get(target)) {
+                apply_transform_json(&mut base, values);
+            }
+            continue;
+        }
+        for rule in &state.editor.rules {
+            if rule.get("scope").and_then(|v|v.as_str()) != Some(scope)
+                || rule.get("side").and_then(|v|v.as_str()) != Some(side)
+                || rule.get("target").and_then(|v|v.as_str()) != Some(target) { continue; }
+            let selector = rule.get("selector").and_then(|v|v.as_str()).unwrap_or_default();
+            let matches = match scope {
+                "all" => true,
+                "tag" => tags.iter().any(|tag| tag == selector),
+                "group" => group_matches(state,selector,item,tags),
+                _ => false,
+            };
+            if matches { apply_transform_json(&mut base, rule.get("transform").unwrap_or(&serde_json::Value::Null)); }
+        }
+    }
+    base
+}
+fn editor_has_line(state: &State, left: bool) -> bool {
+    let side = if left { "left" } else { "right" };
+    state.editor.rules.iter().any(|rule| rule.get("target").and_then(|v|v.as_str()) == Some("line")
+        && rule.get("side").and_then(|v|v.as_str()) == Some(side))
+}
+
 struct Catalog<'a> {
     state: &'a State,
 }
@@ -67,9 +303,18 @@ impl action::ClipCatalog for Catalog<'_> {
                     .into_iter()
                     .find_map(|n| self.state.clips.get(&n))
             });
+        let bow_shot_alias = match name {
+            "use_bow_shot" => Some(if left {
+                "use_bow_shoot_left"
+            } else {
+                "use_bow_shoot_right"
+            }),
+            _ => None,
+        };
         let clip = custom
             .or_else(|| self.state.clips.get(&handed))
             .or_else(|| self.state.clips.get(name))
+            .or_else(|| bow_shot_alias.and_then(|n| self.state.clips.get(n)))
             .or_else(|| aliases.iter().find_map(|n| self.state.clips.get(*n)))?;
         Some(action::ClipMeta {
             name: clip.name.clone(),
@@ -84,29 +329,64 @@ impl action::ClipCatalog for Catalog<'_> {
         })
     }
 }
-fn load(state: &mut State) {
-    if state.attempted {
-        return;
-    }
+fn load(game: &Game<'_>, state: &mut State) {
+    if state.attempted { return; }
     state.attempted = true;
-    let result = resources::embedded().and_then(|r| {
-        let clips = punchy_engine::load_clips(&r.animations)?;
-        Ok((r, clips))
+    state.editor = HandEditor::parse(game.native_setting(ID, "hand_editor.json"));
+    let first_person = game.native_data(resources::PACK_ANIMATIONS);
+    let third_person = game.native_data(resources::PACK_THIRD_PERSON_ANIMATIONS);
+    let third_person_fallback = game.native_data(resources::PACK_THIRD_PERSON_ANIMATIONS_FALLBACK);
+    let geometry = game.native_data(resources::PACK_GEOMETRY);
+    let tuning = game.native_data(resources::PACK_TUNING);
+    let result = resources::from_active_pack(
+        first_person.as_deref(),
+        third_person.as_deref(),
+        third_person_fallback.as_deref(),
+        geometry.as_deref(),
+        tuning.as_deref(),
+    ).and_then(|(source, has_pack_data)| {
+        let clips = punchy_engine::load_clips(&source.animations)?;
+        Ok((source, clips, has_pack_data))
     });
     match result {
-        Ok((source, clips)) => {
-            state.status = format!("{} clips loaded", clips.len());
-            state.clips = clips.into_iter().map(|(k, v)| (k, Arc::new(v))).collect();
+        Ok((source, clips, has_pack_data)) => {
+            state.status = format!("{} clips loaded{}", clips.len(), if has_pack_data { " · resource pack" } else { " · bundled" });
+            state.resource_source = if has_pack_data { "resource_pack" } else { "embedded" }.into();
+            state.clips = clips.into_iter().map(|(key, clip)| (key, Arc::new(clip))).collect();
             state.tuning = punchy_engine::tuning::Tuning::parse(&source.tuning).ok();
             state.source = Some(source);
             state.error = None;
         }
-        Err(e) => {
-            state.status = "Bundled animations could not load".into();
-            state.error = Some(e);
+        Err(error) => {
+            state.status = "Punchy resource-pack data invalid; using bundled resources".into();
+            state.resource_source = "error".into();
+            state.error = Some(error);
+            if let Ok(source) = resources::embedded() {
+                if let Ok(clips) = punchy_engine::load_clips(&source.animations) {
+                    state.clips = clips.into_iter().map(|(key, clip)| (key, Arc::new(clip))).collect();
+                    state.tuning = punchy_engine::tuning::Tuning::parse(&source.tuning).ok();
+                    state.source = Some(source);
+                }
+            }
         }
     }
 }
+
+pub(super) fn resources_reloaded() {
+    STATE.with(|cell| {
+        let mut state = cell.borrow_mut();
+        state.attempted = false;
+        state.source = None;
+        state.clips.clear();
+        state.tuning = None;
+        state.active = None;
+        state.machine = Default::default();
+        state.consume = Default::default();
+        state.mining = Default::default();
+        state.resource_source.clear();
+    });
+}
+
 fn enabled(game: &Game<'_>) -> bool {
     game.native_on(ID)
 }
@@ -163,11 +443,12 @@ pub(super) fn tick(game: &mut Game<'_>) {
     }
     let using = game.used_hand();
     let items = [game.held().cloned(), game.offhand.clone()];
-    let use_down = game.native_mapping("key.use").is_some_and(|m| m.0);
+    let key_use_down = game.native_mapping("key.use").is_some_and(|m| m.0);
+    let use_down = key_use_down || using.is_some();
     let attack_down = game.native_mapping("key.attack").is_some_and(|m| m.0);
     let speed = global_speed(game);
     STATE.with(|cell| {
-        let mut s=cell.borrow_mut();load(&mut s);
+        let mut s=cell.borrow_mut();load(game, &mut s);
         if s.source.is_none() {return;}
         s.main_left=game.settings.main_hand_left;
         s.offhand_item=items[1].is_some();
@@ -207,17 +488,35 @@ pub(super) fn tick(game: &mut Game<'_>) {
             let i=usize::from(h==Hand::Off);
             if let Some(stack)=items[i].as_ref() {
                 let owner=game.player_owner(Some(stack));
-                let mut kind=input.hands[i].kind;
+                let kinetic=horizon_client::spear::Kinetic::of(&stack.item);
+                let mut kind=if kinetic.is_some() {
+                    action::ItemKind::Spear
+                } else {
+                    input.hands[i].kind
+                };
                 if kind==action::ItemKind::Other {
-                    let components=game.pack.item_renderer.models.components(&horizon_client::item_render::stack_view(stack));
-                    let mut animation=components.get("minecraft:consumable").map_or(horizon_world::consumable::UseAnimation::None,horizon_client::first_person::consumable_animation);
+                    let info=game.items().get(&stack.item);
+                    let mut animation=info.and_then(|info| info.consumable.as_ref())
+                        .map_or(horizon_world::consumable::UseAnimation::None,|consumable| consumable.animation);
                     game.native_use_animation(stack,&mut animation);
-                    kind=match animation {horizon_world::consumable::UseAnimation::Eat=>action::ItemKind::Eat,
-                        horizon_world::consumable::UseAnimation::Drink=>action::ItemKind::Drink,_=>kind};
+                    kind=match animation {
+                        horizon_world::consumable::UseAnimation::Eat=>action::ItemKind::Eat,
+                        horizon_world::consumable::UseAnimation::Drink=>action::ItemKind::Drink,
+                        _ if info.is_some_and(|info| info.food.is_some())=>action::ItemKind::Eat,
+                        _=>kind
+                    };
                 }
+                let elapsed_ticks=owner.use_duration-owner.use_item_remaining_ticks-1;
+                let (spear_stage,spear_maxed)=kinetic.map_or((1,false),|k| action::spear_charge_stage(
+                    elapsed_ticks,k.delay_ticks,k.dismount.max_duration_ticks,
+                    k.knockback.max_duration_ticks,k.damage.max_duration_ticks));
                 input.using=Some(action::UseState {hand:hand(h),kind,
-                    elapsed_ticks:owner.use_duration-owner.use_item_remaining_ticks-1,
-                    charge_duration_ticks:owner.crossbow_charge_duration as i32,..Default::default()});
+                    elapsed_ticks,
+                    charge_duration_ticks:owner.crossbow_charge_duration as i32,
+                    spear_stage,spear_maxed,
+                    riptide:stack.enchantment_level("minecraft:riptide")>0,
+                    loyalty:stack.enchantment_level("minecraft:loyalty")>0,
+                    ..Default::default()});
             }
         }
         if s.tuning.is_some() {
@@ -273,7 +572,7 @@ pub(super) fn tick(game: &mut Game<'_>) {
             if p.stopping && p.out_weight<=0. {s.active=None;}
         }
         if let Some(path)=std::env::var_os("PUNCHY_DIAGNOSTICS") {
-            let value=serde_json::json!({"loaded":s.source.is_some(),"resource_source":"embedded","clips":s.clips.len(),"error":s.error,
+            let value=serde_json::json!({"loaded":s.source.is_some(),"resource_source":s.resource_source,"clips":s.clips.len(),"error":s.error,
                 "active":s.active.as_ref().map(|p|serde_json::json!({"name":p.clip.name,"time":p.time,"weight":p.weight,"speed":punchy_engine::playback::rate(&p.clip,p.time,speed,p.multiplier,1.)})),
                 "swings":s.previous_swings,"mining":input.mining,"consume_phase":format!("{:?}",s.consume.phase()),"mining_phase":format!("{:?}",s.mining.phase())});
             if let Ok(bytes)=serde_json::to_vec_pretty(&value) {let _=std::fs::write(path,bytes);}
@@ -294,47 +593,295 @@ pub(super) fn key(game: &mut Game<'_>, key: &str, pressed: bool) {
 }
 pub(super) fn settings(game: &Game<'_>, buttons: &mut Vec<String>) {
     buttons.push(format!("Animation speed: {:.1}", global_speed(game)));
-    buttons.push("Reload animations".into());
-    buttons.push(format!(
-        "Hand poses: {}",
-        if game.native_setting(ID, "hand_poses").as_deref() == Some("horizon") {
-            "Horizon"
-        } else {
-            "Punchy"
+    buttons.push("Reload animations and resource packs".into());
+    buttons.push(format!("Hand poses: {}", if game.native_setting(ID,"hand_poses").as_deref()==Some("horizon") {"Horizon"} else {"Punchy"}));
+    STATE.with(|cell| {
+        let mut state = cell.borrow_mut();
+        load(game, &mut state);
+        state.editor = HandEditor::parse(game.native_setting(ID,"hand_editor.json"));
+        let hand = state.editor.selected_hand;
+        let item = held_item_id(game, hand);
+        let left = editor_left(game, hand);
+        let tags = held_tags(game, &item);
+        let choices = selector_choices(game, &state, &item);
+        if !choices.iter().any(|choice| choice == &state.editor.selected_selector) {
+            state.editor.selected_selector = choices.first().cloned().unwrap_or_default();
         }
-    ));
-    STATE.with(|s| {
-        let mut s = s.borrow_mut();
-        load(&mut s);
-        buttons.push(s.error.clone().unwrap_or_else(|| s.status.clone()));
+        if state.editor.selected_target == "line" && item != "minecraft:fishing_rod" {
+            state.editor.selected_target = "item".into();
+            state.editor.selected_scope = "item".into();
+            state.editor.selected_selector = item.clone();
+        }
+        if state.editor.selected_target == "line" && state.editor.selected_scope != "item" {
+            state.editor.selected_scope = "item".into();
+            state.editor.selected_selector = item.clone();
+        }
+        let target = state.editor.selected_target.clone();
+        let transform = editor_transform(&state, &item, left, &target, &tags);
+        let hand_name = if hand == 0 { "Main hand" } else { "Off hand" };
+        let selector = if state.editor.selected_scope == "item" { item.as_str() } else { state.editor.selected_selector.as_str() };
+        buttons.push(format!("Hand Editor · {hand_name} · {item}"));
+        buttons.push(format!("Target: {} · tap to cycle Item / Arm / Line", target));
+        buttons.push(format!("Scope: {} · {} · tap to cycle", state.editor.selected_scope, if selector.is_empty(){"no selector"}else{selector}));
+        buttons.push("Previous selector".into());
+        buttons.push("Next selector".into());
+        buttons.push(format!("Offset X − · {:.3}", transform.offset[0]));
+        buttons.push(format!("Offset X + · {:.3}", transform.offset[0]));
+        buttons.push(format!("Offset Y − · {:.3}", transform.offset[1]));
+        buttons.push(format!("Offset Y + · {:.3}", transform.offset[1]));
+        buttons.push(format!("Offset Z − · {:.3}", transform.offset[2]));
+        buttons.push(format!("Offset Z + · {:.3}", transform.offset[2]));
+        buttons.push(format!("Rotation X − · {:.1}°", transform.rotation[0]));
+        buttons.push(format!("Rotation X + · {:.1}°", transform.rotation[0]));
+        buttons.push(format!("Rotation Y − · {:.1}°", transform.rotation[1]));
+        buttons.push(format!("Rotation Y + · {:.1}°", transform.rotation[1]));
+        buttons.push(format!("Rotation Z − · {:.1}°", transform.rotation[2]));
+        buttons.push(format!("Rotation Z + · {:.1}°", transform.rotation[2]));
+        buttons.push(format!("Scale − · {:.2}", transform.scale));
+        buttons.push(format!("Scale + · {:.2}", transform.scale));
+        buttons.push(format!("Pivot X − · {:.3}", transform.pivot[0]));
+        buttons.push(format!("Pivot X + · {:.3}", transform.pivot[0]));
+        buttons.push(format!("Pivot Y − · {:.3}", transform.pivot[1]));
+        buttons.push(format!("Pivot Y + · {:.3}", transform.pivot[1]));
+        buttons.push(format!("Pivot Z − · {:.3}", transform.pivot[2]));
+        buttons.push(format!("Pivot Z + · {:.3}", transform.pivot[2]));
+        buttons.push("Mirror selected pose to other hand".into());
+        buttons.push("Reset selected pose".into());
+        let profile_name = state.editor.profiles.get(state.editor.profile_index).and_then(|v|v.get("name")).and_then(|v|v.as_str()).unwrap_or("none");
+        buttons.push(format!("Save new Hand Editor profile · current: {profile_name}"));
+        buttons.push("Load next Hand Editor profile".into());
+        buttons.push("Delete selected Hand Editor profile".into());
+        buttons.push(format!("Undo · {} available", state.editor.undo.len()));
+        buttons.push(format!("Redo · {} available", state.editor.redo.len()));
+        buttons.push("Create group / add held item to selected group".into());
+        buttons.push("Delete selected custom group".into());
+        buttons.push("Export Hand Editor data to hand_editor_export.json".into());
+        buttons.push("Import Hand Editor data from hand_editor_import.json".into());
+        buttons.push(format!("Resource source: {}", state.resource_source));
+        buttons.push(state.error.clone().unwrap_or_else(||state.status.clone()));
     });
 }
+
 pub(super) fn click(game: &Game<'_>, button: usize) {
     match button {
         0 => {
             let speed = global_speed(game);
-            game.native_set_setting(
-                ID,
-                "speed",
-                &if speed >= 5.5 {
-                    "0.5".into()
-                } else {
-                    format!("{:.1}", speed + 0.5)
-                },
-            );
+            game.native_set_setting(ID,"speed",&if speed >= 5.5 {"0.5".into()} else {format!("{:.1}",speed+0.5)});
         }
-        1 => STATE.with(|s| *s.borrow_mut() = State::default()),
-        2 => game.native_set_setting(
-            ID,
-            "hand_poses",
-            if game.native_setting(ID, "hand_poses").as_deref() == Some("horizon") {
-                "punchy"
-            } else {
-                "horizon"
-            },
-        ),
-        _ => {}
+        1 => resources_reloaded(),
+        2 => game.native_set_setting(ID,"hand_poses",if game.native_setting(ID,"hand_poses").as_deref()==Some("horizon"){"punchy"}else{"horizon"}),
+        _ => STATE.with(|cell| {
+            let mut state = cell.borrow_mut();
+            load(game,&mut state);
+            state.editor = HandEditor::parse(game.native_setting(ID,"hand_editor.json"));
+            let hand = state.editor.selected_hand;
+            let item = held_item_id(game,hand);
+            let left = editor_left(game,hand);
+            let tags = held_tags(game,&item);
+            let mut choices = selector_choices(game,&state,&item);
+            if !choices.iter().any(|choice|choice==&state.editor.selected_selector) {
+                state.editor.selected_selector = choices.first().cloned().unwrap_or_default();
+            }
+            match button {
+                3 => { state.editor.selected_hand = 1-state.editor.selected_hand; }
+                4 => {
+                    state.editor.remember();
+                    let next = match state.editor.selected_target.as_str() {
+                        "item" => "arm",
+                        "arm" if item == "minecraft:fishing_rod" => "line",
+                        _ => "item",
+                    };
+                    state.editor.selected_target = next.into();
+                    if next == "line" {
+                        state.editor.selected_scope = "item".into();
+                        state.editor.selected_selector = item.clone();
+                    }
+                }
+                5 => {
+                    if state.editor.selected_target == "line" { return; }
+                    state.editor.remember();
+                    state.editor.selected_scope = match state.editor.selected_scope.as_str() {
+                        "item" => "tag", "tag" => "group", "group" => "all", _ => "item",
+                    }.into();
+                    choices = selector_choices(game,&state,&item);
+                    state.editor.selected_selector = choices.first().cloned().unwrap_or_default();
+                }
+                6 | 7 => {
+                    if !choices.is_empty() {
+                        let current = choices.iter().position(|v|v==&state.editor.selected_selector).unwrap_or(0);
+                        let next = if button==6 { (current+choices.len()-1)%choices.len() } else { (current+1)%choices.len() };
+                        state.editor.selected_selector = choices[next].clone();
+                    }
+                }
+                8..=27 => {
+                    let target = state.editor.selected_target.clone();
+                    let scope = state.editor.selected_scope.clone();
+                    let selector = if scope=="item" { item.clone() } else { state.editor.selected_selector.clone() };
+                    if scope=="tag" && selector.is_empty() { return; }
+                    if scope=="group" && selector.is_empty() { return; }
+                    state.editor.remember();
+                    let mut transform = editor_transform(&state,&item,left,&target,&tags);
+                    let (key,delta) = match button {
+                        8 => ("offX",-0.005), 9 => ("offX",0.005),
+                        10 => ("offY",-0.005), 11 => ("offY",0.005),
+                        12 => ("offZ",-0.005), 13 => ("offZ",0.005),
+                        14 => ("rotX",-0.5), 15 => ("rotX",0.5),
+                        16 => ("rotY",-0.5), 17 => ("rotY",0.5),
+                        18 => ("rotZ",-0.5), 19 => ("rotZ",0.5),
+                        20 => ("scale",-0.01), 21 => ("scale",0.01),
+                        22 => ("pivotX",-0.005), 23 => ("pivotX",0.005),
+                        24 => ("pivotY",-0.005), 25 => ("pivotY",0.005),
+                        26 => ("pivotZ",-0.005), _ => ("pivotZ",0.005),
+                    };
+                    let (minimum,maximum) = if target=="line" {
+                        match key { "scale"=>(0.01,10.0), "rotX"|"rotY"|"rotZ"=>(-720.0,720.0), _=>(-32.0,32.0) }
+                    } else {
+                        match key { "scale"=>(0.1,3.0), "rotX"|"rotY"|"rotZ"=>(-180.0,180.0), "pivotX"|"pivotY"|"pivotZ"=>(-1.0,1.0), _=>(-2.0,2.0) }
+                    };
+                    let next=(transform_component(&transform,key)+delta).clamp(minimum,maximum);
+                    set_transform_component(&mut transform,key,next);
+                    let values=state.editor.transform_mut(&item,left,&target,&scope,&selector);
+                    values.as_object_mut().expect("editor transform object").insert(key.into(),serde_json::json!(next));
+                }
+                28 => {
+                    let target=state.editor.selected_target.clone();
+                    let scope=state.editor.selected_scope.clone();
+                    let selector=if scope=="item" {item.clone()} else {state.editor.selected_selector.clone()};
+                    state.editor.remember();
+                    let mut mirror=editor_transform(&state,&item,left,&target,&tags);
+                    mirror.offset[0] = -mirror.offset[0];
+                    mirror.rotation[1] = -mirror.rotation[1];
+                    mirror.rotation[2] = -mirror.rotation[2];
+                    mirror.pivot[0] = -mirror.pivot[0];
+                    *state.editor.transform_mut(&item,!left,&target,&scope,&selector)=transform_value(&mirror);
+                }
+                29 => {
+                    let target=state.editor.selected_target.clone();
+                    let scope=state.editor.selected_scope.clone();
+                    let selector=if scope=="item" {item.clone()} else {state.editor.selected_selector.clone()};
+                    state.editor.remember();
+                    if scope=="item" {
+                        let side=if left{"left"}else{"right"};
+                        if let Some(entry)=state.editor.items.get_mut(&item).and_then(serde_json::Value::as_object_mut) {
+                            if let Some(side_entry)=entry.get_mut(side).and_then(serde_json::Value::as_object_mut) {
+                                side_entry.remove(&target);
+                            }
+                        }
+                    } else {
+                        state.editor.rules.retain(|rule| !(rule.get("scope").and_then(|v|v.as_str())==Some(scope.as_str())
+                            && rule.get("selector").and_then(|v|v.as_str())==Some(selector.as_str())
+                            && rule.get("side").and_then(|v|v.as_str())==Some(if left{"left"}else{"right"})
+                            && rule.get("target").and_then(|v|v.as_str())==Some(target.as_str())));
+                    }
+                }
+                30 => {
+                    state.editor.remember();
+                    let number=state.editor.profiles.len()+1;
+                    let payload=state.editor.snapshot();
+                    state.editor.profiles.push(serde_json::json!({"name":format!("Android Profile {number}"),"payload":payload}));
+                    state.editor.profile_index=state.editor.profiles.len()-1;
+                }
+                31 => {
+                    if !state.editor.profiles.is_empty() {
+                        state.editor.remember();
+                        state.editor.profile_index=(state.editor.profile_index+1)%state.editor.profiles.len();
+                        let payload=state.editor.profiles[state.editor.profile_index].get("payload").cloned().unwrap_or(serde_json::Value::Null);
+                        state.editor.restore(&payload);
+                    }
+                }
+                32 => {
+                    if !state.editor.profiles.is_empty() {
+                        let index=state.editor.profile_index.min(state.editor.profiles.len()-1);
+                        state.editor.profiles.remove(index);
+                        state.editor.profile_index=state.editor.profile_index.min(state.editor.profiles.len().saturating_sub(1));
+                    }
+                }
+                33 => {
+                    if let Some(previous)=state.editor.undo.pop() {
+                        let current=state.editor.snapshot();
+                        if state.editor.redo.len()>=24 {state.editor.redo.remove(0);}
+                        state.editor.redo.push(current);
+                        state.editor.restore(&previous);
+                    }
+                }
+                34 => {
+                    if let Some(next)=state.editor.redo.pop() {
+                        let current=state.editor.snapshot();
+                        if state.editor.undo.len()>=24 {state.editor.undo.remove(0);}
+                        state.editor.undo.push(current);
+                        state.editor.restore(&next);
+                    }
+                }
+                35 => {
+                    state.editor.remember();
+                    let mut selector=state.editor.selected_selector.clone();
+                    if state.editor.selected_scope!="group" || selector.is_empty() {
+                        let count=state.editor.groups.as_object().map_or(0,|v|v.len());
+                        selector=format!("android_group_{}",count+1);
+                    }
+                    let initial=selector_members(&state,&selector);
+                    let groups=state.editor.groups.as_object_mut().expect("custom groups object");
+                    let members=groups.entry(selector.clone()).or_insert_with(||serde_json::json!(initial)).as_array_mut().expect("group members array");
+                    if !members.iter().any(|v|v.as_str()==Some(item.as_str())) {members.push(serde_json::json!(item));}
+                    state.editor.selected_scope="group".into();
+                    state.editor.selected_selector=selector;
+                }
+                36 => {
+                    if state.editor.selected_scope=="group" {
+                        state.editor.remember();
+                        let selected_group = state.editor.selected_selector.clone();
+                        state.editor.groups.as_object_mut().expect("custom groups object").remove(&selected_group);
+                        state.editor.rules.retain(|rule| !(rule.get("scope").and_then(|v|v.as_str())==Some("group") && rule.get("selector").and_then(|v|v.as_str())==Some(selected_group.as_str())));
+                        state.editor.selected_selector.clear();
+                    }
+                }
+                37 => {
+                    let payload = state.editor.snapshot();
+                    match serde_json::to_string_pretty(&payload) {
+                        Ok(raw) => {
+                            game.native_set_setting(ID, "hand_editor_export.json", &raw);
+                            state.status = "Hand Editor data exported to hand_editor_export.json".into();
+                        }
+                        Err(error) => state.status = format!("Hand Editor export failed: {error}"),
+                    }
+                }
+                38 => {
+                    match game.native_setting(ID, "hand_editor_import.json") {
+                        Some(raw) => match serde_json::from_str::<serde_json::Value>(&raw) {
+                            Ok(payload) if payload.get("items").is_some() || payload.get("rules").is_some() || payload.get("groups").is_some() => {
+                                state.editor.remember();
+                                state.editor.restore(&payload);
+                                let number = state.editor.profiles.len() + 1;
+                                state.editor.profiles.push(serde_json::json!({"name":format!("Imported Profile {number}"),"payload":payload}));
+                                state.editor.profile_index = state.editor.profiles.len() - 1;
+                                state.status = "Imported Hand Editor data".into();
+                            }
+                            Ok(_) => state.status = "Invalid Hand Editor import: missing items, rules or groups".into(),
+                            Err(error) => state.status = format!("Invalid Hand Editor import JSON: {error}"),
+                        },
+                        None => state.status = "Place hand_editor_import.json in the Punchy data folder first".into(),
+                    }
+                }
+                _ => {}
+            }
+            state.editor.save(game);
+        }),
     }
+}
+
+pub(super) fn fishing_line_transform(game: &Game<'_>, left: bool) -> Option<punchy_engine::tuning::Transform> {
+    if !enabled(game) { return None; }
+    STATE.with(|cell| {
+        let mut state=cell.borrow_mut();
+        load(game,&mut state);
+        let tags=held_tags(game,"minecraft:fishing_rod");
+        let transform=editor_transform(&state,"minecraft:fishing_rod",left,"line",&tags);
+        let side=if left{"left"}else{"right"};
+        let has_rule=state.editor.rules.iter().any(|rule| rule.get("target").and_then(|v|v.as_str())==Some("line")
+            && rule.get("side").and_then(|v|v.as_str())==Some(side));
+        let has_item=state.editor.items.get("minecraft:fishing_rod").and_then(|v|v.get(side)).and_then(|v|v.get("line")).is_some();
+        (has_rule || has_item).then_some(transform)
+    })
 }
 
 // Authored skeletal delta calibrated against the same bone's rest transform.
@@ -494,12 +1041,9 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                             kind: s.item_kinds[h].as_deref(),
                             ..Default::default()
                         };
-                        let arm = tuning
-                            .transform_for(&context, left, true)
-                            .unwrap_or_default();
-                        let item = tuning
-                            .transform_for(&context, left, false)
-                            .unwrap_or_default();
+                        let tags = held_tags(game, id);
+                        let arm = editor_transform(&s, id, left, "arm", &tags);
+                        let item = editor_transform(&s, id, left, "item", &tags);
                         let suppress_tuning = animation.is_some_and(|(c, t, _)| {
                             c.effect_active("disable_arm_tuning", t)
                                 || (c.effect_active("use_keyframes_v2", t)

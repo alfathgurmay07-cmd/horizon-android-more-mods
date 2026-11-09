@@ -7,6 +7,11 @@ const MAX_MEMBER: u64 = 32 * 1024 * 1024;
 pub const ANIMATIONS: &str =
     "resourcepacks/punchy/assets/minecraft/punchy/animations/player.animation.json";
 pub const GEOMETRY: &str = "assets/punchy/geo/player.geo.json";
+pub const PACK_ANIMATIONS: &str = "assets/minecraft/punchy/animations/player.animation.json";
+pub const PACK_THIRD_PERSON_ANIMATIONS: &str = "assets/punchy/animations/player_3_p.animation.json";
+pub const PACK_THIRD_PERSON_ANIMATIONS_FALLBACK: &str = "assets/minecraft/punchy/animations/player_3_p.animation.json";
+pub const PACK_GEOMETRY: &str = "assets/punchy/geo/player.geo.json";
+pub const PACK_TUNING: &str = "assets/minecraft/punchy/compat/tuning_template.json";
 
 #[derive(Clone, Debug)]
 pub struct Bone {
@@ -43,6 +48,61 @@ pub fn embedded() -> Result<Resources, String> {
         bones: parse_bones(geometry)?,
         tuning: serde_json::from_slice(tuning).map_err(|e| e.to_string())?,
     })
+}
+
+pub fn from_active_pack(
+    first_person: Option<&[u8]>,
+    third_person: Option<&[u8]>,
+    third_person_fallback: Option<&[u8]>,
+    geometry: Option<&[u8]>,
+    tuning: Option<&[u8]>,
+) -> Result<(Resources, bool), String> {
+    let mut result = embedded()?;
+    let mut animation_doc: Value = serde_json::from_slice(&result.animations).map_err(|e| e.to_string())?;
+    let mut has_pack_data = false;
+    for (label, bytes) in [
+        ("third-person animations", third_person.or(third_person_fallback)),
+        ("first-person animations", first_person),
+    ] {
+        let Some(bytes) = bytes.filter(|b| !b.is_empty()) else { continue };
+        let incoming: Value = serde_json::from_slice(bytes).map_err(|e| format!("Punchy {label}: {e}"))?;
+        let incoming = incoming.get("animations").and_then(Value::as_object)
+            .ok_or_else(|| format!("Punchy {label}: missing animations object"))?;
+        let destination = animation_doc.get_mut("animations").and_then(Value::as_object_mut)
+            .ok_or("Bundled Punchy animations are missing their animations object")?;
+        for (name, clip) in incoming {
+            match destination.get_mut(name) {
+                Some(existing) => merge_json(existing, clip),
+                None => { destination.insert(name.clone(), clip.clone()); }
+            }
+        }
+        has_pack_data = true;
+    }
+    result.animations = serde_json::to_vec(&animation_doc).map_err(|e| e.to_string())?;
+    if let Some(bytes) = geometry.filter(|b| !b.is_empty()) {
+        result.bones = parse_bones(bytes).map_err(|e| format!("Punchy geometry: {e}"))?;
+        has_pack_data = true;
+    }
+    if let Some(bytes) = tuning.filter(|b| !b.is_empty()) {
+        let incoming: Value = serde_json::from_slice(bytes).map_err(|e| format!("Punchy tuning: {e}"))?;
+        merge_json(&mut result.tuning, &incoming);
+        has_pack_data = true;
+    }
+    Ok((result, has_pack_data))
+}
+
+fn merge_json(destination: &mut Value, incoming: &Value) {
+    match (destination, incoming) {
+        (Value::Object(destination), Value::Object(incoming)) => {
+            for (key, value) in incoming {
+                match destination.get_mut(key) {
+                    Some(existing) => merge_json(existing, value),
+                    None => { destination.insert(key.clone(), value.clone()); }
+                }
+            }
+        }
+        (destination, incoming) => *destination = incoming.clone(),
+    }
 }
 
 pub fn member(path: &Path, name: &str) -> Result<Vec<u8>, String> {
@@ -160,6 +220,26 @@ mod tests {
             .unwrap();
         assert_eq!(sword.variations, vec!["attack_1", "attack_2", "attack_3"]);
         assert!(clips["use_shield"].hold_on_last_frame);
+    }
+
+    #[test]
+    fn resource_pack_overrides_named_clips_and_keeps_bundled_defaults() {
+        let overlay = br#"{"animations":{"custom_walk":{"animation_length":2,"bones":{"right_arm":{"rotation":[1,2,3]}}}}}"#;
+        let (loaded, used) = from_active_pack(Some(overlay), None, None, None, None).unwrap();
+        assert!(used);
+        let clips = crate::load_clips(&loaded.animations).unwrap();
+        assert!(clips.contains_key("custom_walk"));
+        assert!(clips.contains_key("attack_1"));
+    }
+
+    #[test]
+    fn missing_resource_pack_assets_keep_embedded_resources() {
+        let base = embedded().unwrap();
+        let (loaded, used) = from_active_pack(None, None, None, None, None).unwrap();
+        assert!(!used);
+        assert_eq!(loaded.animations, base.animations);
+        assert_eq!(loaded.tuning, base.tuning);
+        assert_eq!(loaded.bones.len(), base.bones.len());
     }
 
     #[test]

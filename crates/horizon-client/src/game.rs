@@ -96,7 +96,10 @@ mod mod_appleskin;
 mod mod_appleskin_glue;
 #[cfg(target_os = "android")]
 #[path = "../../../mods/official/freecam/mixins/freecam/runtime.rs"]
-mod freecam;
+mod umbx_freecam;
+#[cfg(target_os = "android")]
+#[path = "../../../mods/official/freecam/mixins/freecam/glue.rs"]
+mod umbx_freecam_glue;
 #[cfg(target_os = "android")]
 #[path = "../../../mods/official/freecam/android.rs"]
 pub(crate) mod freecam_hooks;
@@ -7581,6 +7584,12 @@ impl Game<'_> {
     /// A key event after rebinding, as the default key of its mapping (the
     /// keyboard and controllers both end here).
     fn mapped_key(&mut self, key: KeyCode, pressed: bool, repeat: bool) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if let std::ops::ControlFlow::Break(result) =
+            freecam_hooks::mapped(self, key, pressed, repeat)
+        {
+            return result;
+        }
         #[cfg(target_os = "android")]
         if !pressed && self.android_custom_key_held(key) {
             return Ok(());
@@ -20738,6 +20747,13 @@ impl Loading {
             return;
         }
         follow_keymap(&mut event);
+        #[cfg(target_os = "android")]
+        if matches!(
+            freecam_hooks::window(self, &event),
+            std::ops::ControlFlow::Break(())
+        ) {
+            return;
+        }
         if let Err(error) = self.menu_event(event_loop, event) {
             self.error = Some(error);
             crate::game::exit_app(event_loop);

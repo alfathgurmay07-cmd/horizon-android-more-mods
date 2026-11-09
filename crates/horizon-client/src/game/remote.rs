@@ -7048,6 +7048,27 @@ impl Game<'_> {
         done
     }
 
+    pub(super) fn remote_accurate_use_block(&mut self, hand: Hand, hit: super::Hit) -> bool {
+        self.use_failed = false;
+        let mut canceled = false;
+        self.native_right_click_block(hit.pos, hit.face, &mut canceled);
+        if canceled {
+            self.use_failed = true;
+            return true;
+        }
+        let before = self.with_hand(hand, |g| g.held().map(|s| s.count));
+        let swings = self.swings_started;
+        let done = self.remote_use_item_on_at(hand, Some(hit));
+        if done
+            && self.swings_started != swings
+            && let Some(after) = self.with_hand(hand, |g| g.held().map(|s| s.count))
+            && (Some(after) != before || self.creative)
+        {
+            self.heights.item_used(hand);
+        }
+        done
+    }
+
     /// MultiPlayerGameMode.useItemOn for `hand`: whether the click ends there
     /// (the block reacts, or a block item is placed).
     fn remote_use_item_on(&mut self, hand: Hand) -> bool {
@@ -7058,6 +7079,18 @@ impl Game<'_> {
     }
 
     fn remote_use_item_on_inner(&mut self, hand: Hand) -> bool {
+        let hit = self.pick();
+        self.remote_use_item_on_target(hand, hit)
+    }
+
+    fn remote_use_item_on_at(&mut self, hand: Hand, hit: Option<super::Hit>) -> bool {
+        let success = self.remote_use_item_on_target(hand, hit);
+        #[cfg(target_os = "android")]
+        super::punchy::used(self, hand, success);
+        success
+    }
+
+    fn remote_use_item_on_target(&mut self, hand: Hand, hit: Option<super::Hit>) -> bool {
         let held = self.with_hand(hand, |g| g.held().cloned());
         let held_block = held
             .as_ref()
@@ -7066,7 +7099,7 @@ impl Game<'_> {
         let debug_stick = held
             .as_ref()
             .is_some_and(|stack| &*stack.item == "minecraft:debug_stick");
-        if let Some(hit) = self.pick() {
+        if let Some(hit) = hit {
             // ShelfBlock.useItemOn consumes a nonempty main-hand click client-side
             // without predicting the inventory swap or swinging.
             let shelf_reacts = hand == Hand::Main

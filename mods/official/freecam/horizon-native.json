@@ -1,8 +1,8 @@
 {
   "game": "26.3",
   "horizon": "af55a734865da4f1b11836164a979ff06a1f0449",
-  "id": "freecam",
-  "mixins": "4342a0bfbe71d4d14185528d64e496d6022f16a1",
+  "id": "freecam_plus",
+  "mixins": "5a64af938ec86b00d53d16a408aabc0038fb3e57",
   "schema": 1,
-  "version": "0.1.0"
+  "version": "1.0.1"
 }

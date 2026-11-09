@@ -3342,15 +3342,23 @@ impl Game<'_> {
     pub(super) fn native_screen_title(&self) -> Option<String> {
         self.remote_menu_title().map(|t| t.plain())
     }
-    /// A data file of the game's resources, content mods' included
-    /// (`data/mymod/machines.json`), when there is one: what a mod's content
-    /// says, read at runtime. Only relative paths of plain names. API 20.
+    /// A data or asset file from the game's active resource overlay: content
+    /// mod data (`data/...`) or resource-pack assets (`assets/...`). Only
+    /// relative paths of plain names are accepted. Files are bounded so a
+    /// mod cannot accidentally read an unbounded archive member. API 20.
     pub(super) fn native_data(&self, path: &str) -> Option<Vec<u8>> {
         let plain = |p: &str| !p.is_empty() && p != "." && p != ".." && !p.contains('\\');
-        if !path.starts_with("data/") || !path.split('/').all(plain) {
+        if !(path.starts_with("data/") || path.starts_with("assets/"))
+            || !path.split('/').all(plain)
+        {
             return None;
         }
-        fs::read(self.options.resources.join(path)).ok()
+        let file = self.options.resources.join(path);
+        let size = fs::metadata(&file).ok()?.len();
+        if size > 32 * 1024 * 1024 {
+            return None;
+        }
+        fs::read(file).ok()
     }
     /// The block at `pos` (`mymod:cable`; air where nothing is loaded).
     /// API 20.

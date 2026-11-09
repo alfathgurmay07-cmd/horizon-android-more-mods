@@ -615,7 +615,7 @@ pub fn vanilla_kind(id: &str) -> &'static str {
         "AXE"
     } else if name.ends_with("_hoe") {
         "HOE"
-    } else if name.ends_with("_spear") {
+    } else if name == "spear" || name.ends_with("_spear") {
         "SPEAR"
     } else if matches!(
         name,
@@ -747,6 +747,40 @@ mod tests {
         );
         assert_eq!(a.candidates("inspect_right"), ["inspect_right"]);
     }
+    #[test]
+    fn bundled_special_use_tuning_resolves_bow_trident_spear_and_consumables() {
+        let t = Tuning::parse(
+            &serde_json::from_str(include_str!("data/tuning.json")).unwrap(),
+        )
+        .unwrap();
+
+        let bow = t.animation("minecraft:bow", "use_bow", false).unwrap();
+        assert_eq!(bow.name.as_deref(), Some("use_bow"));
+        let bow_shot = t.animation("minecraft:bow", "use_bow_shot", false).unwrap();
+        assert_eq!(bow_shot.name.as_deref(), Some("use_bow_shoot"));
+
+        let trident = t.animation("minecraft:trident", "use_trident", false).unwrap();
+        assert_eq!(trident.name.as_deref(), Some("use_trident"));
+        assert_eq!(
+            t.animation("minecraft:trident", "use_trident_throw_riptide", false)
+                .unwrap()
+                .name
+                .as_deref(),
+            Some("use_trident_throw_riptide")
+        );
+
+        let spear = t.animation("minecraft:wooden_spear", "spear_charge", false).unwrap();
+        assert_eq!(spear.stages[0].as_deref(), Some("use_spear_pose_1"));
+        assert_eq!(spear.stages[1].as_deref(), Some("use_spear_pose_2"));
+        assert_eq!(spear.stages[2].as_deref(), Some("use_spear_pose_3"));
+        assert_eq!(vanilla_kind("minecraft:spear"), "SPEAR");
+
+        let eating = t.animation("minecraft:golden_apple", "eating", false).unwrap();
+        assert_eq!(eating.start.as_deref(), Some("eat_start"));
+        assert_eq!(eating.looping.as_deref(), Some("eat_loop"));
+        assert_eq!(eating.end.as_deref(), Some("eat_end"));
+    }
+
     #[test]
     fn registry_kind_covers_full_blocks_without_guessing_custom_names() {
         let t=Tuning::parse(&json!({"item":{"FULL_BLOCK":{"customAnimation":[{"type":"attack","var_1":"interact"}]}}})).unwrap();

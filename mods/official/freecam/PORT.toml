@@ -1,9 +1,9 @@
-id = "freecam"
-name = "Freecam"
-version = "0.1.0"
+id = "freecam_plus"
+name = "Freecam+"
+version = "1.0.1"
 kind = "android_static_native"
-source_archive = "freecam-0.1.0.hnmod"
+source_archive = "freecam_plus-1.0.1.hnmod"
 horizon_revision = "af55a734865da4f1b11836164a979ff06a1f0449"
-mixins_revision = "4342a0bfbe71d4d14185528d64e496d6022f16a1"
-required_hooks = 1
-android_status = "partial_android_runtime_wired"
+mixins_revision = "5a64af938ec86b00d53d16a408aabc0038fb3e57"
+required_hooks = 9
+android_status = "ported_android_camera_input_wheel_and_settings_wired"

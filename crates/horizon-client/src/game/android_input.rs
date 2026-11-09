@@ -246,6 +246,15 @@ impl Game<'_> {
             if mapping == "key.sneak" || mapping == "key.sprint" {
                 let slot = usize::from(mapping == "key.sprint");
                 let key = [KeyCode::ShiftLeft, KeyCode::ControlLeft][slot];
+                #[cfg(target_os = "android")]
+                if let std::ops::ControlFlow::Break(result) =
+                    super::freecam_hooks::mapped(self, key, down, false)
+                {
+                    if let Err(error) = result {
+                        log::warn!("Freecam+ touch input: {error}");
+                    }
+                    return;
+                }
                 if down {
                     self.pad.custom_keys.insert(key);
                     self.physical_keys.insert(key);
@@ -333,6 +342,15 @@ impl Game<'_> {
         let Some(key) = horizon_client::keybinds::key_code(name) else {
             return;
         };
+        #[cfg(target_os = "android")]
+        if let std::ops::ControlFlow::Break(result) =
+            super::freecam_hooks::mapped(self, key, down, false)
+        {
+            if let Err(error) = result {
+                log::warn!("Freecam+ touch input: {error}");
+            }
+            return;
+        }
         if down {
             self.pad.custom_keys.insert(key);
             self.physical_keys.insert(key);
@@ -1339,6 +1357,15 @@ impl Game<'_> {
             "streaming":self.streaming.stages().into_iter().collect::<std::collections::BTreeMap<_,_>>()})
     }
     pub(super) fn android_key_up(&mut self, key: KeyCode) {
+        #[cfg(target_os = "android")]
+        if let std::ops::ControlFlow::Break(result) =
+            super::freecam_hooks::mapped(self, key, false, false)
+        {
+            if let Err(error) = result {
+                log::warn!("Freecam+ touch input release: {error}");
+            }
+            return;
+        }
         if self.pad.custom_keys.contains(&key) {
             return;
         }

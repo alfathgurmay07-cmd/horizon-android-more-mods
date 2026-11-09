@@ -6,16 +6,16 @@ This tree contains the Android-native ports and source-preserving imports used b
 
 - `accurate-block-placement/` and `connected-textures/` are Android-native source ports.
 - `appleskin-horizon/` is wired into the Android HUD and Options > Mods.
-- `freecam/` is partially wired into camera, input, player simulation and Options > Mods.
+- `freecam/` is Freecam+ 1.0.1 with detached camera, movement, turning, wheel and settings hooks.
 - Every bundled native module starts disabled; enable it explicitly in Options > Mods.
 
 ## Imported HNMOD sources
 
 | Folder | Native mod ID | Version | Android status |
 |---|---|---:|---|
-| `freecam/` | `freecam` | 0.1.0 | partial Android runtime port; core camera/input hooks wired |
+| `freecam/` | `freecam_plus` | 1.0.1 | Android static port of Freecam+ with detached camera and flight controls |
 | `motion-blur/` | `motion_blur` | 0.1.0 | source-only, not wired |
-| `punchy/` | `punchy` | 0.1.2 | statically bundled Android preview; renderer parity incomplete |
+| `punchy/` | `punchy` | 0.1.2 | source-only preview; renderer parity incomplete |
 | `basic-hud/` | `basic_hud` | 0.5.0 | statically wired to Android hooks; compile/device validation pending |
 | `visuality-horizon/` | `visuality_horizon` | 1.0.2 | statically wired to Android game and renderer hooks; compile/device validation pending |
 

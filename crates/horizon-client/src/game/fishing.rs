@@ -822,7 +822,7 @@ impl Game<'_> {
             .zip(self.rod_hand_position(alpha, size));
         let width = horizon_client::gfx::outline_width(size[0]);
         let mut lines = Vec::new();
-        for (hook, hand) in own.into_iter().chain(self.remote_hook_ends(alpha)) {
+        let mut append = |hook: glam::DVec3, hand: glam::DVec3| {
             let offset = (hand - (hook + glam::DVec3::new(0.0, 0.25, 0.0))).as_vec3();
             let point = |a: f32| {
                 let y = offset.y * (a * a + a) * 0.5 + 0.25;
@@ -834,6 +834,31 @@ impl Game<'_> {
                 color: 0xFF00_0000,
                 width,
             }));
+        };
+        if let Some((hook, hand)) = own {
+            let left = self.main_hand_rod() == self.settings.main_hand_left;
+            let hand = if let Some(transform) = super::punchy::fishing_line_transform(self, left) {
+                let forward = glam::DVec3::from_array(view_vector(self.yaw, self.pitch)).normalize_or_zero();
+                let right = forward.cross(glam::DVec3::Y).normalize_or_zero();
+                let up = right.cross(forward).normalize_or_zero();
+                let delta = hand - hook;
+                let local = glam::DVec3::new(delta.dot(right), delta.dot(up), delta.dot(forward));
+                let rotation = glam::DQuat::from_euler(
+                    glam::EulerRot::XYZ,
+                    f64::from(transform.rotation[0]).to_radians(),
+                    f64::from(transform.rotation[1]).to_radians(),
+                    f64::from(transform.rotation[2]).to_radians(),
+                );
+                let rotated = rotation * (local * f64::from(transform.scale));
+                let offset = right * (f64::from(transform.offset[0]) / 16.0)
+                    + up * (f64::from(transform.offset[1]) / 16.0)
+                    + forward * (f64::from(transform.offset[2]) / 16.0);
+                hook + right * rotated.x + up * rotated.y + forward * rotated.z + offset
+            } else { hand };
+            append(hook, hand);
+        }
+        for (hook, hand) in self.remote_hook_ends(alpha) {
+            append(hook, hand);
         }
         lines
     }

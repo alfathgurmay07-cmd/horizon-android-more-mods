@@ -184,7 +184,7 @@ impl ItemKind {
         if id.ends_with("_axe") {
             return Self::Axe;
         }
-        if id.ends_with("_spear") {
+        if id == "spear" || id.ends_with("_spear") {
             return Self::Spear;
         }
         match id {
@@ -1095,6 +1095,22 @@ mod tests {
     }
 
     #[test]
+    fn spear_item_ids_are_classified_as_spear() {
+        for id in [
+            "minecraft:spear",
+            "minecraft:wooden_spear",
+            "minecraft:stone_spear",
+            "minecraft:copper_spear",
+            "minecraft:iron_spear",
+            "minecraft:golden_spear",
+            "minecraft:diamond_spear",
+            "minecraft:netherite_spear",
+        ] {
+            assert_eq!(ItemKind::from_id(id), ItemKind::Spear, "{id}");
+        }
+    }
+
+    #[test]
     fn bow_requires_three_ticks_and_projectile() {
         assert!(!bow_shot_allowed(2, true));
         assert!(bow_shot_allowed(3, true));
@@ -1128,6 +1144,89 @@ mod tests {
         assert_eq!(play.hand, Hand::Off);
         assert_eq!(play.clip.name, "interact");
         assert!(play.looping);
+    }
+
+    #[test]
+    fn special_use_items_select_their_dedicated_animation_clips() {
+        let cases = [
+            (ItemKind::Bow, "use_bow", ActionKind::Bow, 1),
+            (ItemKind::Trident, "use_trident", ActionKind::Trident, 1),
+            (ItemKind::Spear, "use_spear_pose_2", ActionKind::Spear, 2),
+            (ItemKind::Eat, "use_eat", ActionKind::Eat, 1),
+            (ItemKind::Drink, "use_drink", ActionKind::Drink, 1),
+        ];
+        for (kind, clip, expected_kind, spear_stage) in cases {
+            let mut machine = ActionMachine::default();
+            let input = Input {
+                use_down: true,
+                using: Some(UseState {
+                    kind,
+                    spear_stage,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let play = selected(machine.tick(&input, &Catalog(&[clip])).unwrap());
+            assert_eq!(play.kind, expected_kind, "{clip}");
+            assert_eq!(play.clip.name, clip, "{clip}");
+        }
+    }
+
+    #[test]
+    fn bow_release_selects_the_bow_shoot_clip_after_a_valid_draw() {
+        let mut machine = ActionMachine::default();
+        let catalog = Catalog(&["use_bow", "use_bow_shot"]);
+        let mut input = Input {
+            use_down: true,
+            using: Some(UseState {
+                kind: ItemKind::Bow,
+                elapsed_ticks: 20,
+                ..Default::default()
+            }),
+            has_bow_projectile_or_creative: true,
+            bow_shot_configured: true,
+            ..Default::default()
+        };
+        assert_eq!(selected(machine.tick(&input, &catalog).unwrap()).clip.name, "use_bow");
+        input.use_down = false;
+        input.using = None;
+        let play = selected(machine.tick(&input, &catalog).unwrap());
+        assert_eq!(play.kind, ActionKind::Bow);
+        assert_eq!(play.clip.name, "use_bow_shot");
+    }
+
+    #[test]
+    fn trident_release_uses_riptide_or_loyalty_specific_throw_clip() {
+        for (riptide, loyalty, expected) in [
+            (true, false, "use_trident_throw_riptide"),
+            (false, true, "use_trident_throw_loyalty"),
+            (false, false, "use_trident_throw"),
+        ] {
+            let mut machine = ActionMachine::default();
+            let catalog = Catalog(&[
+                "use_trident",
+                "use_trident_throw",
+                "use_trident_throw_riptide",
+                "use_trident_throw_loyalty",
+            ]);
+            let mut input = Input {
+                use_down: true,
+                using: Some(UseState {
+                    kind: ItemKind::Trident,
+                    elapsed_ticks: 12,
+                    riptide,
+                    loyalty,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            assert_eq!(selected(machine.tick(&input, &catalog).unwrap()).clip.name, "use_trident");
+            input.use_down = false;
+            input.using = None;
+            let play = selected(machine.tick(&input, &catalog).unwrap());
+            assert_eq!(play.kind, ActionKind::Trident);
+            assert_eq!(play.clip.name, expected);
+        }
     }
 
     #[test]

@@ -38,9 +38,9 @@ pub const ANDROID_BUNDLED: [(&str, &str, &str); 17] = [
         "Shows saturation and food restoration on the hunger HUD",
     ),
     (
-        "freecam",
-        "Freecam",
-        "Move the camera independently from the player",
+        "freecam_plus",
+        "Freecam+",
+        "Fly the camera independently while the player stays in place",
     ),
     (
         "accurate_block_placement",
@@ -126,7 +126,13 @@ impl ModList {
                 .map(str::to_owned)
                 .collect()
         };
-        let (enabled, disabled) = (ids("true"), ids("false"));
+        let (mut enabled, mut disabled) = (ids("true"), ids("false"));
+        if enabled.remove("freecam") {
+            enabled.insert("freecam_plus".to_owned());
+        }
+        if disabled.remove("freecam") {
+            disabled.insert("freecam_plus".to_owned());
+        }
         #[cfg(target_os = "android")]
         let disabled = {
             let mut disabled = disabled;
@@ -147,6 +153,14 @@ impl ModList {
             {
                 let entry = keys.entry(id.to_owned()).or_default();
                 entry.insert(name.to_owned(), v.trim().to_owned());
+            }
+        }
+        if let Some(old_keys) = keys.remove("freecam") {
+            if let Some(toggle) = old_keys.get("toggle") {
+                keys.entry("freecam_plus".to_owned())
+                    .or_default()
+                    .entry("toggle".to_owned())
+                    .or_insert_with(|| toggle.clone());
             }
         }
         Self {
@@ -232,6 +246,16 @@ mod tests {
         for (id, _, _) in ANDROID_BUNDLED {
             assert!(list.disabled.contains(id), "{id} should start disabled");
         }
+    }
+
+    #[test]
+    fn migrates_legacy_freecam_state_and_toggle_binding() {
+        let list = ModList::parse(
+            "mod.freecam:true\\nkey.freecam.toggle:key.keyboard.g\\n",
+        );
+        assert!(list.enabled.contains("freecam_plus"));
+        assert!(!list.enabled.contains("freecam"));
+        assert_eq!(list.keys_of("freecam_plus"), [("toggle", "key.keyboard.g")]);
     }
 
     #[test]
