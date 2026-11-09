@@ -1,0 +1,180 @@
+name: Fix Freecam Android Build Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_fix:
+        description: Apply the Freecam Android integration fixes to this branch
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-freecam-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fix-freecam:
+    if: ${{ inputs.confirm_fix == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Fix Freecam Android integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+          game_path = root / "crates/horizon-client/src/game.rs"
+          bundle_path = root / "crates/horizon-client/src/game/android_bundled.rs"
+
+          for path in (game_path, bundle_path):
+              if not path.is_file():
+                  raise SystemExit(f"Required source file is missing: {path.relative_to(root)}")
+
+          game = game_path.read_text(encoding="utf-8")
+          bundle = bundle_path.read_text(encoding="utf-8")
+
+          hook = '''        #[cfg(target_os = "android")]
+          if matches!(
+              freecam_hooks::window(self, &event),
+              std::ops::ControlFlow::Break(())
+          ) {
+              return;
+          }
+          '''
+          hook = "\n".join(line[2:] if line.startswith("  ") else line for line in hook.splitlines()) + "\n"
+
+          wrong_hook = re.compile(
+              r'(?m)^        #\[cfg\(target_os = "android"\)\]\n'
+              r'        if matches!\(\n'
+              r'            freecam_hooks::window\(self, &event\),\n'
+              r'            std::ops::ControlFlow::Break\(\(\)\)\n'
+              r'        \) \{\n'
+              r'            return;\n'
+              r'        \}\n'
+          )
+          game, removed = wrong_hook.subn("", game)
+          if removed not in (0, 1):
+              raise SystemExit(f"Unexpected misplaced Freecam window hook count: {removed}")
+
+          call = "freecam_hooks::window(self, &event)"
+          method_start = game.find("pub(super) fn handle_window_event(")
+          if method_start < 0:
+              raise SystemExit("Game::handle_window_event was not found")
+          method_end = game.find("\n}\n", method_start)
+          if method_end < 0:
+              raise SystemExit("Could not locate the end of Game's event-handler impl")
+          method_region = game[method_start:method_end]
+
+          if call not in method_region:
+              key_normalization = "            event.physical_key = PhysicalKey::Code(code);\n        }\n"
+              position = method_region.find(key_normalization)
+              if position < 0:
+                  raise SystemExit("Android physical-key normalization insertion point was not found")
+              insert_at = method_start + position + len(key_normalization)
+              game = game[:insert_at] + hook + game[insert_at:]
+
+          if game.count(call) != 1:
+              raise SystemExit("Freecam window hook must appear exactly once")
+          method_start = game.find("pub(super) fn handle_window_event(")
+          method_end = game.find("\n}\n", method_start)
+          if call not in game[method_start:method_end]:
+              raise SystemExit("Freecam window hook is not inside Game::handle_window_event")
+          loading_start = game.find("impl Loading")
+          if loading_start >= 0 and call in game[loading_start:]:
+              raise SystemExit("Freecam window hook is still attached to Loading")
+
+          bundle, removed_frame = re.subn(
+              r'(?m)^[ \t]*super::freecam_hooks::frame\(&\*game, elapsed\);\n',
+              "",
+              bundle,
+          )
+          bundle, removed_hud = re.subn(
+              r'(?m)^[ \t]*super::freecam_hooks::hud\(game, batch\);\n',
+              "",
+              bundle,
+          )
+          if removed_frame > 1 or removed_hud > 1:
+              raise SystemExit("Unexpected duplicate Freecam frame/HUD call sites")
+
+          bundle, replaced_disable = re.subn(
+              r'super::freecam::disable\(\)',
+              "super::umbx_freecam::stop()",
+              bundle,
+          )
+          if replaced_disable > 1:
+              raise SystemExit("Unexpected duplicate legacy Freecam disable calls")
+          if "super::freecam_hooks::frame(" in bundle or "super::freecam_hooks::hud(" in bundle:
+              raise SystemExit("Unsupported Freecam frame/HUD adapter calls remain")
+          if "super::freecam::disable()" in bundle:
+              raise SystemExit("Legacy Freecam module reference remains")
+          if "super::umbx_freecam::stop()" not in bundle:
+              raise SystemExit("Freecam+ runtime cleanup call was not found")
+
+          if game != game_path.read_text(encoding="utf-8"):
+              game_path.write_text(game, encoding="utf-8", newline="\n")
+          if bundle != bundle_path.read_text(encoding="utf-8"):
+              bundle_path.write_text(bundle, encoding="utf-8", newline="\n")
+
+          print(f"Moved Freecam window hook into Game event handler: {removed == 1 or call in game}")
+          print(f"Removed unsupported frame calls: {removed_frame}")
+          print(f"Removed unsupported HUD calls: {removed_hud}")
+          print(f"Replaced legacy disable calls: {replaced_disable}")
+          PY
+          git diff --check
+
+      - name: Verify corrected integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          game = Path("crates/horizon-client/src/game.rs").read_text(encoding="utf-8")
+          bundle = Path("crates/horizon-client/src/game/android_bundled.rs").read_text(encoding="utf-8")
+          call = "freecam_hooks::window(self, &event)"
+          start = game.index("pub(super) fn handle_window_event(")
+          end = game.index("\n}\n", start)
+          assert game.count(call) == 1
+          assert call in game[start:end]
+          loading = game.find("impl Loading")
+          assert loading < 0 or call not in game[loading:]
+          assert "super::freecam_hooks::frame(" not in bundle
+          assert "super::freecam_hooks::hud(" not in bundle
+          assert "super::freecam::disable()" not in bundle
+          assert "super::umbx_freecam::stop()" in bundle
+          print("Freecam Android integration checks passed.")
+          PY
+
+      - name: Commit and push fixes
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/horizon-client/src/game.rs crates/horizon-client/src/game/android_bundled.rs
+          if git diff --cached --quiet; then
+            echo "Freecam Android integration is already fixed." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "Fix Freecam Android build integration"
+          git push origin "HEAD:${TARGET_BRANCH}"
+          {
+            echo "## Freecam Android integration fixed"
+            echo "The Freecam window hook now runs on Game, unsupported frame/HUD calls were removed, and reset uses the Freecam+ runtime."
+            echo "Branch: ${TARGET_BRANCH}."
+          } >> "$GITHUB_STEP_SUMMARY"
