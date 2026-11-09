@@ -16489,6 +16489,13 @@ impl Game<'_> {
         {
             event.physical_key = PhysicalKey::Code(code);
         }
+      #[cfg(target_os = "android")]
+if matches!(
+  freecam_hooks::window(self, &event),
+  std::ops::ControlFlow::Break(())
+) {
+  return;
+}
         #[cfg(target_os = "android")]
         if let WindowEvent::KeyboardInput { event, .. } = &event
             && event.state == ElementState::Pressed
@@ -20747,13 +20754,6 @@ impl Loading {
             return;
         }
         follow_keymap(&mut event);
-        #[cfg(target_os = "android")]
-        if matches!(
-            freecam_hooks::window(self, &event),
-            std::ops::ControlFlow::Break(())
-        ) {
-            return;
-        }
         if let Err(error) = self.menu_event(event_loop, event) {
             self.error = Some(error);
             crate::game::exit_app(event_loop);

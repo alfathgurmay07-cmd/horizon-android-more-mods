@@ -409,7 +409,6 @@ pub(super) fn native_frame(game: &mut Game<'_>, elapsed: Duration) {
     let _ = (&game, &elapsed);
     #[cfg(target_os = "android")]
     {
-        super::freecam_hooks::frame(&*game, elapsed);
         recipes_frame::run(&mut *game);
         accurate_block_placement_frame::run(&mut *game);
         connected_textures_frame::run(&mut *game);
@@ -427,7 +426,6 @@ pub(super) fn native_hud(
 ) {
     #[cfg(target_os = "android")]
     {
-        super::freecam_hooks::hud(game, batch);
         armorhud_hud(game, batch, corners);
         jade_hud(game, batch);
         basic_hud_draw(game, batch, corners);
@@ -549,6 +547,6 @@ pub(super) fn reset() {
     horizon_client_render::native_connected_textures::reset();
     official_recipes::set_viewer(None);
     smartf3_native::reset();
-    let _ = super::freecam::disable();
+    let _ = super::umbx_freecam::stop();
     horizon_client::motion::freecam_gate::set_freeze(false);
 }
