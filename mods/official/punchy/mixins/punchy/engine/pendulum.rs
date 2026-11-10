@@ -185,7 +185,7 @@ impl State {
 
     pub fn update(&mut self, input: Input, settings: Settings, action_feedback_enabled: bool) -> bool {
         let settings = settings.resolve();
-        let dt = finite(input.dt, 1.0 / 60.0).clamp(0.001, 1.0 / 30.0);
+        let dt = finite(Some(input.dt), 1.0 / 60.0).clamp(0.001, 1.0 / 30.0);
         self.last_dt = dt;
         if !self.initialized {
             self.initialize(input, settings);
