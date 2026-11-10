@@ -1,18 +1,21 @@
-HORIZON PUNCHY HAND PHYSICS PARITY DELTA — BUILD FIX 4
+HORIZON PUNCHY HAND PHYSICS PARITY DELTA — BUILD FIX 5
 Base: horizon-android-more-mods-android (7).zip
-Scope: only files added or modified relative to the uploaded base archive.
-Modified files: 9
-Added files: 1
-Removed files: 0
+Scope: cumulative changed/added files only, compared with the uploaded base archive.
 
-CI ERROR FIXES
-The previous Actions run confirmed the explicit PhysicsProfile array type resolves E0284. The next compile isolated a remaining E0502 borrow from s.last_items[h] across mutations to pendulum state.
-Cloned the selected item ID before the mutable pendulum updates and passed references to that owned String into item/tag/editor lookups, ending the borrow from State before mutations begin.
+BUILD FIX 5 — ROOT CAUSE, NOT A ONE-LINE WORKAROUND
+The latest Actions compile showed that the item-ID borrow was already owned, but the active-animation tuple still retained a reference to the clip inside State.active. That reference remained live while the renderer mutated pendulum state, producing E0502.
+
+The per-hand render setup now resolves all animation-dependent inputs inside one bounded match on State.active and returns only owned values: action ownership, blend weight, tuning/pendulum flags, and the sampled AttachmentFrame. The active Playback/Clip borrow ends before any pendulum state or kick mutation. The obsolete borrowed animation tuple and interpolated expression value (which had no consumers) are removed. Existing timing, ownership, effect activation, blend and frame-sampling semantics are preserved.
+
+The physics-profile array remains explicitly typed as [PhysicsProfile; 2]. Per-hand item IDs remain cloned before state mutation. The regression suite now checks that active animation data is reduced to owned values before pendulum writes.
 
 VALIDATION
-Focused Punchy regression suite: 18 passed. The full repository test suite did not finish within the local 120-second execution limit. The new GitHub Actions compile has not yet been rerun; Android build success is not claimed.
+- Four directly affected Punchy test files: 42 passed.
+- Focused Punchy hand-motion regression file: 19 passed.
+- All test_punchy_*.py files: 61 passed, 3 failed. The remaining three failures are pre-existing Android integration/catalog static assertions; those same three also fail on the uploaded base archive. The fourth stale assertion from the base suite and two stale editor-call assertions were updated to match the current implementation.
+- No local Rust/Cargo toolchain is installed in this environment, so this patch has not been independently compiled here. GitHub Actions is still required to confirm the Android build. No build success is claimed.
 
-MODIFIED FILES
+MODIFIED FILES (12)
 CHANGED-FILES-MANIFEST.txt
 mods/official/punchy/mixins/punchy/README.md
 mods/official/punchy/mixins/punchy/engine/attachments.rs
@@ -21,10 +24,13 @@ mods/official/punchy/mixins/punchy/engine/resources.rs
 mods/official/punchy/mixins/punchy/engine/tuning.rs
 mods/official/punchy/mixins/punchy/geometry.rs
 mods/official/punchy/mixins/punchy/runtime.rs
+tests/test_punchy_android_interaction_wiring.py
+tests/test_punchy_hand_editor_parity.py
 tests/test_punchy_hand_motion_rewrite.py
+tests/test_punchy_resourcepack_hand_editor.py
 
-ADDED FILES
+ADDED FILES (1)
 mods/official/punchy/mixins/punchy/engine/pendulum.rs
 
-REMOVED FILES
+REMOVED FILES (0)
 (none)

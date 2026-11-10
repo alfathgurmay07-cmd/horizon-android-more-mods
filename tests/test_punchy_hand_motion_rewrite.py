@@ -199,3 +199,16 @@ def test_render_item_id_is_owned_before_mutating_pendulum_state():
     assert "let arm = editor_transform(&s, &id, left, \"arm\", &tags);" in runtime
     assert "let item = editor_transform(&s, &id, left, \"item\", &tags);" in runtime
     assert "let id = &s.last_items[h];" not in runtime
+
+
+def test_active_animation_data_is_reduced_to_owned_values_before_pendulum_mutation():
+    runtime = RUNTIME.read_text()
+    render = runtime.split("pub(super) fn begin", 1)[1].split("pub(super) fn ready", 1)[0]
+    assert "match s.active.as_ref()" in render
+    assert "let (owns, weight, suppress_tuning, pendulum_disabled, pendulum_influence, frame)" in render
+    assert "let animation = s.active.as_ref()" not in render
+    assert "animation.is_some_and" not in render
+    scope_end = render.index("let tags = held_tags(game, &id);")
+    pendulum_write = render.index("s.pendulum_states[i].reset();", scope_end)
+    assert scope_end < pendulum_write
+    assert render.index("let frame = p.frame(") < scope_end

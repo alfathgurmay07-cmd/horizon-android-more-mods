@@ -79,8 +79,8 @@ class PunchyResourcePackAndHandEditorTests(unittest.TestCase):
         source = RUNTIME.read_text()
         self.assertIn('"hand_editor.json"', source)
         self.assertIn("editor_transform", source)
-        self.assertIn('editor_transform(&s, id, left, "arm", &tags)', source)
-        self.assertIn('editor_transform(&s, id, left, "item", &tags)', source)
+        self.assertIn('editor_transform(&s, &id, left, "arm", &tags)', source)
+        self.assertIn('editor_transform(&s, &id, left, "item", &tags)', source)
         self.assertIn("state.editor.save(game)", source)
 
     def test_runtime_load_uses_selected_resource_pack_assets(self):

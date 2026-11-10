@@ -53,9 +53,10 @@ class PunchyAndroidInteractionTests(unittest.TestCase):
 
     def test_full_block_item_and_arm_transforms_use_registry_context(self):
         runtime = (ROOT / "mods/official/punchy/mixins/punchy/runtime.rs").read_text()
-        self.assertIn("kind: s.item_kinds[h].as_deref()", runtime)
-        self.assertIn("transform_for(&context, left, true)", runtime)
-        self.assertIn("transform_for(&context, left, false)", runtime)
+        self.assertIn("kind: s.item_kinds[hand].as_deref()", runtime)
+        self.assertIn("tuning.physics_for(&context, left)", runtime)
+        self.assertIn("t.transform_for(&context,left,arm)", runtime)
+        self.assertIn("fn editor_base_transform", runtime)
         tuning = json.loads((ROOT / "mods/official/punchy/mixins/punchy/engine/data/tuning.json").read_text())
         full_block = tuning["item"]["FULL_BLOCK"]
         self.assertIn("transforms", full_block)

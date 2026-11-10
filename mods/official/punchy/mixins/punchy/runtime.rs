@@ -1567,48 +1567,79 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                         let i = usize::from(left);
                         let h = usize::from(s.main_left != left);
                         let id = s.last_items[h].clone();
-                        let owns = s.active.as_ref().is_some_and(|p| {
-                            (s.main_left != (p.hand == action::Hand::Off)) == left
-                                || punchy_engine::policy::dual_handed(&p.clip, p.time, s.offhand_item, s.offhand_item)
-                        });
-                        let animation = s.active.as_ref().map(|p| {
-                            let t = if p.time < p.previous {
-                                p.time
-                            } else {
-                                p.previous + (p.time - p.previous) * s.render_alpha
+                        let (owns, weight, suppress_tuning, pendulum_disabled, pendulum_influence, frame) =
+                            match s.active.as_ref() {
+                                Some(p) => {
+                                    let owns =
+                                        (s.main_left != (p.hand == action::Hand::Off)) == left
+                                            || punchy_engine::policy::dual_handed(
+                                                &p.clip,
+                                                p.time,
+                                                s.offhand_item,
+                                                s.offhand_item,
+                                            );
+                                    let weight = p.previous_weight
+                                        + (p.weight - p.previous_weight) * s.render_alpha;
+                                    let time = if p.time < p.previous {
+                                        p.time
+                                    } else {
+                                        p.previous + (p.time - p.previous) * s.render_alpha
+                                    };
+                                    let suppress_tuning = p.clip.effect_active("disable_arm_tuning", time)
+                                        || (p.clip.effect_active("use_keyframes_v2", time)
+                                            && !p.clip.effect_active("keep_arm_tuning", time));
+                                    let keyframes_active = p.clip.effect_active("use_keyframes_v2", time);
+                                    let pendulum_disabled_by_clip =
+                                        p.clip.effect_active("disable_pendulum", time)
+                                            || p.clip.effect_active("disable_pendulum_physics", time);
+                                    let pendulum_disabled =
+                                        owns && (keyframes_active || pendulum_disabled_by_clip);
+                                    let pendulum_influence = if owns && pendulum_disabled_by_clip {
+                                        1.0 - weight
+                                    } else {
+                                        1.0
+                                    };
+                                    let frame = p.frame(
+                                        &skeleton,
+                                        left,
+                                        s.main_left,
+                                        s.offhand_item,
+                                        s.render_alpha,
+                                    );
+                                    (
+                                        owns,
+                                        weight,
+                                        suppress_tuning,
+                                        pendulum_disabled,
+                                        pendulum_influence,
+                                        frame,
+                                    )
+                                }
+                                None => (
+                                    false,
+                                    1.0,
+                                    false,
+                                    false,
+                                    1.0,
+                                    punchy_engine::attachments::sample_frame(
+                                        &skeleton,
+                                        left,
+                                        None,
+                                        1.0,
+                                        true,
+                                    ),
+                                ),
                             };
-                            (&*p.clip, t, p.previous_expression+(p.expression-p.previous_expression)*s.render_alpha)
-                        });
-                        let weight = s.active.as_ref().map_or(1., |p| {
-                            p.previous_weight + (p.weight - p.previous_weight) * s.render_alpha
-                        });
                         let tags = held_tags(game, &id);
                         let arm = editor_transform(&s, &id, left, "arm", &tags);
                         let item = editor_transform(&s, &id, left, "item", &tags);
-                        let suppress_tuning = animation.is_some_and(|(c, t, _)| {
-                            c.effect_active("disable_arm_tuning", t)
-                                || (c.effect_active("use_keyframes_v2", t)
-                                    && !c.effect_active("keep_arm_tuning", t))
-                        });
                         let factor = if owns && suppress_tuning { 1. - weight } else { 1. };
-                        let frame=s.active.as_ref().map_or_else(
-                            ||punchy_engine::attachments::sample_frame(&skeleton,left,None,1.,true),
-                            |p|p.frame(&skeleton,left,s.main_left,s.offhand_item,s.render_alpha));
                         let physics = physics_profiles[i];
                         let item_id = id.clone();
                         if s.pendulum_items[i] != item_id {
                             s.pendulum_states[i].reset();
                             s.pendulum_items[i] = item_id;
                         }
-                        let pendulum_disabled = animation.is_some_and(|(clip, time, _)| {
-                            owns && (clip.effect_active("use_keyframes_v2", time)
-                                || clip.effect_active("disable_pendulum", time)
-                                || clip.effect_active("disable_pendulum_physics", time))
-                        });
-                        let pendulum_influence = if animation.is_some_and(|(clip, time, _)| {
-                            owns && (clip.effect_active("disable_pendulum", time)
-                                || clip.effect_active("disable_pendulum_physics", time))
-                        }) { 1.0 - weight } else { 1.0 };
                         pendulum_input.action_value = s.pendulum_action_values[i];
                         pendulum_input.action_kick = s.pendulum_action_kicks[i];
                         if physics.mode == punchy_engine::pendulum::Mode::None {
