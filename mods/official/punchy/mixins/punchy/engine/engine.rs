@@ -1407,9 +1407,6 @@ pub mod tuning;
 #[path = "horizon_pose.rs"]
 pub mod horizon_pose;
 
-#[path = "hand_motion.rs"]
-pub mod hand_motion;
-
 #[path = "skeleton.rs"]
 pub mod skeleton;
 

@@ -1,17 +1,17 @@
 HORIZON PUNCHY CUMULATIVE DELTA
 Base: horizon-android-more-mods-android (6).zip
 Scope: only files added or modified relative to the original source archive.
-Modified files: 20
-Added files: 5
+Modified files: 18
+Added files: 3
 Removed files: 0
 
-HAND MOTION SYSTEM REWRITE
-Adds a separate two-hand motion engine for procedural idle breathing/jitter, spring-based hand inertia, look lag, walk/sprint cycles, jump/fall/land, flight, swimming, climbing, crawling, horse riding, and boat rowing.
-Uses actual PlayerMotion inputs and per-hand first-person transforms. Keyframe clips are layered when available; procedural physics fills missing built-in clips. Punchy action clips retain arm ownership and vanilla swing is not suppressed by locomotion alone.
-Built-in locomotion clip routing includes jump/land/sprint, climb/climb2, crawl, swimming, and horse riding clips where present in the built-in archive. Boat rowing uses procedural motion because the built-in archive has no dedicated rowing animation.
+BUILT-IN RESOURCE PACK ARCHITECTURE
+Punchy Built-in Animations is installed at assets/minecraft/resourcepacks/punchy.zip when the Punchy mod is enabled.
+The pack is required and pinned at the bottom of the active resource-pack stack.
+Player-selected resource packs are layered above it; matching custom asset paths override built-in assets.
+The built-in archive contains pack.mcmeta, the default Punchy animation JSON, player geometry, and tuning template.
 
 MODIFIED FILES
-CHANGED-FILES-MANIFEST.txt
 crates/horizon-client-render/src/mod_list.rs
 crates/horizon-client-render/src/options_ui.rs
 crates/horizon-client-render/src/packs.rs
@@ -26,7 +26,6 @@ mods/official/punchy/README.md
 mods/official/punchy/mixins/punchy/README.md
 mods/official/punchy/mixins/punchy/engine/attachments.rs
 mods/official/punchy/mixins/punchy/engine/engine.rs
-mods/official/punchy/mixins/punchy/engine/horizon_pose.rs
 mods/official/punchy/mixins/punchy/engine/resources.rs
 mods/official/punchy/mixins/punchy/runtime.rs
 packaging/android/res/drawable-nodpi/launcher_icon.png
@@ -34,15 +33,27 @@ tests/test_punchy_resourcepack_hand_editor.py
 
 ADDED FILES
 mods/official/punchy/mixins/punchy/engine/data/punchy_builtin.zip
-mods/official/punchy/mixins/punchy/engine/hand_motion.rs
 tests/test_punchy_hand_editor_ui_icon.py
-tests/test_punchy_hand_motion_rewrite.py
 tests/test_punchy_resourcepack_inspect_regressions.py
 
 REMOVED FILES
 (none)
 
 VALIDATION
-8 new focused static wiring tests passed.
-Combined focused Python suite: 49 passed, 4 deselected. The 4 deselected checks were verified to fail identically against the original baseline archive because they expect stale names/formatting.
-Rust unit tests and Android APK build were not run because cargo, rustc, and rustfmt are unavailable in this environment.
+22 focused Python tests passed: resource-pack loading/priority, compatibility, Inspect Pickaxe, and Hand Editor parity.
+Rust compilation and Android APK build were not run because Rust toolchain is unavailable in the environment.
+
+CI COMPILE FIX (WORKFLOW RUN 42722480965)
+crates/horizon-client-render/src/options_ui.rs: moved NativeSlider event variant to Event and removed unused Act::NativeSlider variant. The native slider handler already exists in crates/horizon-client/src/game/options.rs; startup-menu event handling is also present. Android compilation also requires the NativeSlider type to be referenced through the direct dependency path horizon_client_render::mod_list::NativeSlider in android_bundled.rs and Punchy runtime.rs; crate::mod_list resolves against the Android crate root and is unavailable there.
+
+CURRENT REGRESSION CHECKS
+tests/test_punchy_resourcepack_hand_editor.py: 9 passed
+tests/test_punchy_hand_editor_ui_icon.py: 3 passed
+tests/test_punchy_resourcepack_inspect_regressions.py: 5 passed
+Total in this rerun: 17 passed. Rust/Android build not run locally because rustc/cargo are unavailable in the packaging environment.
+
+HAND EDITOR SCREEN SEPARATION
+The Punchy native settings page now contains only general Punchy settings, key binds, status, and a dedicated Open Hand Editor navigation button. The editor controls are rendered on a separate Page::PunchyHandEditor page with Hand, Edit target, Applies to, selector chips, transform sections/sliders, pose actions, and profile/group actions. The editor footer uses Back to Punchy and returns to the previous Punchy settings page. A Rust UI regression test covers opening the child page, keeping transform sliders off the parent page, and returning.
+
+LATEST VALIDATION
+17 focused Python tests passed: Hand Editor UI/icon, resource-pack/Hand Editor, and Inspect Pickaxe regressions. The new Rust UI regression test was added but not run because rustc/cargo are unavailable in this packaging environment. Android APK build was not run.
