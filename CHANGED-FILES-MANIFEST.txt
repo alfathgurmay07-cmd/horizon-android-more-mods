@@ -1,17 +1,19 @@
-HORIZON PUNCHY CUMULATIVE DELTA
+HORIZON PUNCHY HAND PHYSICS PARITY DELTA — BUILD FIX 2
 Base: horizon-android-more-mods-android (7).zip
-Scope: all Punchy source changes in this package, relative to the uploaded base archive.
+Scope: only files added or modified relative to the uploaded base archive.
 Modified files: 9
 Added files: 1
 Removed files: 0
 
-HAND POSE AND ITEM TRANSFORM PARITY
-Retains the two-hand procedural idle and locomotion layers, action clip ownership, item grip-pivot conversion, editor/tuning transform flow, and attachment ordering already present in this working source.
-The attachment path applies Pendulum tuning in the configured handSpace before or after item pre-transform, matching Punchy's renderer. Grip pivots are converted from Bedrock global bone pivots into item coordinates.
+CI ERROR FIXES
+The previous Actions run confirmed the earlier finite(input.dt) type mismatch was fixed and punchy-engine compiled.
+Replaced Horizon geometry Vec3::Y references with glam::Vec3::Y for the renderer matrix vector type.
+Pre-resolved the left/right pendulum PhysicsProfile values before mutating runtime pendulum state, removing overlapping borrows of the resource/tuning fields.
 
-PENDULUM INPUT AND ACTION FEEDBACK
-Movement sway now uses processed strafe/forward input (strafe * 1.5, -forward * 1.6), smoothed with Punchy's 1 - 0.7^(dt * 20) factor. Boat passengers suppress movement offsets, while walk-animation bob remains sourced from the player model for other passenger states.
-Action playback now triggers the per-hand spring (stiffness 60, damping 15.5), with the original action impulse and kick. Pending kicks are preserved through initial state initialization and consumed only during a subsequent physics update. Clip effects for use_keyframes_v2, disable_pendulum, and disable_pendulum_physics follow the original distinction between disabling action feedback and fading pendulum influence.
+VALIDATION
+Focused Punchy regression suite: 58 passed, 4 deselected.
+Four deselected tests are known stale baseline static expectations unrelated to these renderer compile fixes.
+The new GitHub Actions compile has not yet been rerun; Android build success is not claimed.
 
 MODIFIED FILES
 CHANGED-FILES-MANIFEST.txt
@@ -29,8 +31,3 @@ mods/official/punchy/mixins/punchy/engine/pendulum.rs
 
 REMOVED FILES
 (none)
-
-VALIDATION
-Focused Punchy regression suite: 56 passed, 4 deselected.
-The four deselected baseline checks retain stale static expectations for older hard-coded transform calls and unrelated hook/load names. Running them unchanged produces the same baseline mismatch; they are not counted as passing.
-Rust unit tests and Android APK build were not run because cargo, rustc, and rustfmt are unavailable in this environment.

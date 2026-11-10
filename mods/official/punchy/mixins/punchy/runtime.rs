@@ -1544,8 +1544,23 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
         let render_alpha = s.render_alpha;
         let mut pendulum_input = pendulum_frame_input(&mut s, game, render_alpha);
         if s.enabled && game.native_setting(ID, "hand_poses").as_deref() != Some("horizon") {
-            if let (Some(source), Some(tuning)) = (&s.source, &s.tuning) {
-                if let Ok(skeleton) = punchy_engine::skeleton::Skeleton::new(&source.bones)
+            let source_bones = s.source.as_ref().map(|source| source.bones.clone());
+            let physics_profiles = s.tuning.as_ref().map(|tuning| {
+                std::array::from_fn(|i| {
+                    let left = i != 0;
+                    let hand = usize::from(s.main_left != left);
+                    let context = punchy_engine::tuning::ItemContext {
+                        id: &s.last_items[hand],
+                        kind: s.item_kinds[hand].as_deref(),
+                        ..Default::default()
+                    };
+                    tuning.physics_for(&context, left)
+                })
+            });
+            if let (Some(source_bones), Some(physics_profiles)) =
+                (source_bones.as_ref(), physics_profiles.as_ref())
+            {
+                if let Ok(skeleton) = punchy_engine::skeleton::Skeleton::new(source_bones)
                 {
                     for left in [false, true] {
                         let i = usize::from(left);
@@ -1566,11 +1581,6 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                         let weight = s.active.as_ref().map_or(1., |p| {
                             p.previous_weight + (p.weight - p.previous_weight) * s.render_alpha
                         });
-                        let context = punchy_engine::tuning::ItemContext {
-                            id,
-                            kind: s.item_kinds[h].as_deref(),
-                            ..Default::default()
-                        };
                         let tags = held_tags(game, id);
                         let arm = editor_transform(&s, id, left, "arm", &tags);
                         let item = editor_transform(&s, id, left, "item", &tags);
@@ -1583,7 +1593,7 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                         let frame=s.active.as_ref().map_or_else(
                             ||punchy_engine::attachments::sample_frame(&skeleton,left,None,1.,true),
                             |p|p.frame(&skeleton,left,s.main_left,s.offhand_item,s.render_alpha));
-                        let physics = tuning.physics_for(&context, left);
+                        let physics = physics_profiles[i];
                         let item_id = id.clone();
                         if s.pendulum_items[i] != item_id {
                             s.pendulum_states[i].reset();

@@ -228,8 +228,8 @@ pub(super) fn render(game: &mut crate::game::Game<'_>, alpha: f64) -> Vec<Vertex
                 let first_state = game.resolve_item(&stack, first_context, Some(&owner), seed);
                 let up = |rendered: &horizon_client::item_render::ItemRenderState| {
                     rendered.layers.first().map(|layer| {
-                        let vector = layer.matrix.transform_vector3(Vec3::Y);
-                        if vector.length_squared() > 1e-8 { vector.normalize() } else { Vec3::Y }
+                        let vector = layer.matrix.transform_vector3(glam::Vec3::Y);
+                        if vector.length_squared() > 1e-8 { vector.normalize() } else { glam::Vec3::Y }
                     })
                 };
                 if let (Some(third_up), Some(first_up)) = (up(&state), up(&first_state)) {

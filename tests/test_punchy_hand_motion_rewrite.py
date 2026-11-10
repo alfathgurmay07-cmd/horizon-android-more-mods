@@ -134,6 +134,7 @@ def test_pendulum_uses_camera_velocity_limits_and_hand_space_order():
     attachments = (ENGINE / "attachments.rs").read_text()
     for token in ["yaw_delta", "pitch_delta", "camera_sens", "gravity", "motion_sens", "ground_transition_cooldown", "let decay ="]:
         assert token in module
+    assert "finite(Some(input.dt), 1.0 / 60.0)" in module
     assert "settings.hand_space != Some(false)" in attachments
     assert "settings.hand_space == Some(false)" in attachments
 
@@ -173,3 +174,19 @@ def test_pendulum_uses_processed_movement_and_original_action_spring():
     assert 'effect_active("disable_pendulum", time)' in runtime
     assert 'effect_active("disable_pendulum_physics", time)' in runtime
     assert "return false;" in module and "        true\n    }" in module
+
+
+def test_renderer_up_vector_uses_glam_vec3_type():
+    geometry = (ROOT / "mods/official/punchy/mixins/punchy/geometry.rs").read_text()
+    assert "transform_vector3(glam::Vec3::Y)" in geometry
+    assert "else { glam::Vec3::Y }" in geometry
+    assert "transform_vector3(Vec3::Y)" not in geometry
+
+
+def test_pendulum_physics_profiles_are_resolved_before_mutating_state():
+    runtime = RUNTIME.read_text()
+    assert "let source_bones = s.source.as_ref().map(|source| source.bones.clone());" in runtime
+    assert "let physics_profiles = s.tuning.as_ref().map(|tuning|" in runtime
+    assert "tuning.physics_for(&context, left)" in runtime
+    assert "let physics = physics_profiles[i];" in runtime
+    assert "let tuning = s.tuning.clone();" not in runtime
