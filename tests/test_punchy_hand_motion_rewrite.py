@@ -186,7 +186,16 @@ def test_renderer_up_vector_uses_glam_vec3_type():
 def test_pendulum_physics_profiles_are_resolved_before_mutating_state():
     runtime = RUNTIME.read_text()
     assert "let source_bones = s.source.as_ref().map(|source| source.bones.clone());" in runtime
-    assert "let physics_profiles = s.tuning.as_ref().map(|tuning|" in runtime
+    assert "let physics_profiles: Option<[punchy_engine::tuning::PhysicsProfile; 2]>" in runtime
     assert "tuning.physics_for(&context, left)" in runtime
     assert "let physics = physics_profiles[i];" in runtime
     assert "let tuning = s.tuning.clone();" not in runtime
+
+
+def test_render_item_id_is_owned_before_mutating_pendulum_state():
+    runtime = RUNTIME.read_text()
+    assert "let id = s.last_items[h].clone();" in runtime
+    assert "let tags = held_tags(game, &id);" in runtime
+    assert "let arm = editor_transform(&s, &id, left, \"arm\", &tags);" in runtime
+    assert "let item = editor_transform(&s, &id, left, \"item\", &tags);" in runtime
+    assert "let id = &s.last_items[h];" not in runtime

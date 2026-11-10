@@ -1566,7 +1566,7 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                     for left in [false, true] {
                         let i = usize::from(left);
                         let h = usize::from(s.main_left != left);
-                        let id = &s.last_items[h];
+                        let id = s.last_items[h].clone();
                         let owns = s.active.as_ref().is_some_and(|p| {
                             (s.main_left != (p.hand == action::Hand::Off)) == left
                                 || punchy_engine::policy::dual_handed(&p.clip, p.time, s.offhand_item, s.offhand_item)
@@ -1582,9 +1582,9 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                         let weight = s.active.as_ref().map_or(1., |p| {
                             p.previous_weight + (p.weight - p.previous_weight) * s.render_alpha
                         });
-                        let tags = held_tags(game, id);
-                        let arm = editor_transform(&s, id, left, "arm", &tags);
-                        let item = editor_transform(&s, id, left, "item", &tags);
+                        let tags = held_tags(game, &id);
+                        let arm = editor_transform(&s, &id, left, "arm", &tags);
+                        let item = editor_transform(&s, &id, left, "item", &tags);
                         let suppress_tuning = animation.is_some_and(|(c, t, _)| {
                             c.effect_active("disable_arm_tuning", t)
                                 || (c.effect_active("use_keyframes_v2", t)

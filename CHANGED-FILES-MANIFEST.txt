@@ -1,4 +1,4 @@
-HORIZON PUNCHY HAND PHYSICS PARITY DELTA — BUILD FIX 2
+HORIZON PUNCHY HAND PHYSICS PARITY DELTA — BUILD FIX 4
 Base: horizon-android-more-mods-android (7).zip
 Scope: only files added or modified relative to the uploaded base archive.
 Modified files: 9
@@ -6,14 +6,11 @@ Added files: 1
 Removed files: 0
 
 CI ERROR FIXES
-The previous Actions run confirmed the earlier finite(input.dt) type mismatch was fixed and punchy-engine compiled.
-Replaced Horizon geometry Vec3::Y references with glam::Vec3::Y for the renderer matrix vector type.
-Pre-resolved the left/right pendulum PhysicsProfile values before mutating runtime pendulum state, removing overlapping borrows of the resource/tuning fields.
+The previous Actions run confirmed the explicit PhysicsProfile array type resolves E0284. The next compile isolated a remaining E0502 borrow from s.last_items[h] across mutations to pendulum state.
+Cloned the selected item ID before the mutable pendulum updates and passed references to that owned String into item/tag/editor lookups, ending the borrow from State before mutations begin.
 
 VALIDATION
-Focused Punchy regression suite: 58 passed, 4 deselected.
-Four deselected tests are known stale baseline static expectations unrelated to these renderer compile fixes.
-The new GitHub Actions compile has not yet been rerun; Android build success is not claimed.
+Focused Punchy regression suite: 18 passed. The full repository test suite did not finish within the local 120-second execution limit. The new GitHub Actions compile has not yet been rerun; Android build success is not claimed.
 
 MODIFIED FILES
 CHANGED-FILES-MANIFEST.txt
