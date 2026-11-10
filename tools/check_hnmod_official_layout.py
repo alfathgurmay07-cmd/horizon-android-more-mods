@@ -6,6 +6,8 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT = ROOT / "crates/horizon-client/src/game/android_bundled.rs"
+GAME = ROOT / "crates/horizon-client/src/game.rs"
+MOBS = ROOT / "crates/horizon-client/src/mobs.rs"
 RENDER = ROOT / "crates/horizon-client-render/src/lib.rs"
 
 
@@ -20,6 +22,8 @@ def check_path_attrs(source: Path) -> None:
 
 def main() -> None:
     check_path_attrs(CLIENT)
+    check_path_attrs(GAME)
+    check_path_attrs(MOBS)
     check_path_attrs(RENDER)
 
     client = CLIENT.read_text(encoding="utf-8")
@@ -39,7 +43,8 @@ def main() -> None:
 
     packages = {
         "accurate-block-placement": ("accurate_block_placement", "1.0.0"),
-        "connected-textures": ("connected_textures", "0.1.2"),
+        "connected-textures": ("connected_textures", "0.1.7"),
+        "punchy-moves": ("punchy_moves", "1.2.0"),
     }
     for folder, expected in packages.items():
         package = ROOT / "mods/official" / folder
@@ -48,7 +53,8 @@ def main() -> None:
             raise SystemExit(f"wrong metadata in mods/official/{folder}/PORT.toml")
         if not (package / "README.md").is_file():
             raise SystemExit(f"missing package README: {folder}")
-        if not list((package / "src").glob("*.rs")):
+        source_dir = package / "src" if folder != "punchy-moves" else package / "mixins/punchy_moves"
+        if not list(source_dir.glob("*.rs")):
             raise SystemExit(f"missing Rust source: {folder}")
 
     # Their actual IDs and descriptions are used to create independent in-game rows.
@@ -57,7 +63,13 @@ def main() -> None:
     if "accurate_block_placement" not in abp or "connected_textures" not in ctm:
         raise SystemExit("a port no longer has its own NativeMod entry")
 
-    print("OK: both official Android native source packages resolve and register separate Options > Mods rows")
+    moves = (ROOT / "mods/official/punchy-moves/mixins/punchy_moves/runtime.rs").read_text(encoding="utf-8")
+    if 'const NAME: &str = "Punchy Moves";' not in moves:
+        raise SystemExit("Punchy Moves display name is not set")
+    if "super::punchy_moves::listed" not in client:
+        raise SystemExit("Punchy Moves is missing from Options > Mods registration")
+
+    print("OK: official Android native source packages resolve and register separate Options > Mods rows")
 
 
 if __name__ == "__main__":

@@ -48,6 +48,9 @@ impl Game<'_> {
     /// block under a sprinting player's feet streams back from them every
     /// tick, for the window's own player and for the other players it sees.
     fn sprint_dust(&mut self) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_sprint(self) { return; }
+
         // Each runner's feet, movement, supporting block and box width.
         let mut runners: Vec<(Vec3, Vec3, Option<[i32; 3]>, f64)> = Vec::new();
         // Entity.canSpawnSprintParticle.
@@ -263,3 +266,6 @@ fn swirl(
     let z = feet.z + size.0 * (2.0 * r.next_double() - 1.0) * 0.5;
     particles.add(&list[pick], [x, y, z], [1.0; 3]);
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/sprint.rs");

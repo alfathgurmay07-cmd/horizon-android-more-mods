@@ -40,6 +40,9 @@ impl NativeShaders {
 impl Game<'_> {
     /// Builds the pack at `path` when its files changed since it was last read.
     pub(super) fn tick_native_shader_pack(&mut self, path: &Path) {
+        #[cfg(target_os = "android")]
+        horizon_physics_shader_pack(self);
+
         let now = Instant::now();
         let state = &mut self.native_shaders;
         if state.looked.is_some_and(|t| now - t < LOOK_EVERY) {
@@ -148,3 +151,6 @@ fn fingerprint(path: &Path) -> Option<u64> {
     let _ = walk(&values, &mut hasher);
     Some(hasher.finish())
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/shader_pack.rs");

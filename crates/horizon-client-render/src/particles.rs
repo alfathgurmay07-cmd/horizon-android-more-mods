@@ -1298,6 +1298,9 @@ impl ParticleEngine {
         override_limiter: bool,
         always_show: bool,
     ) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_catch(options, p, v) { return; }
+
         let c = self.camera;
         let d2 = (p[0] - c[0]).powi(2) + (p[1] - c[1]).powi(2) + (p[2] - c[2]).powi(2);
         if let Some(requested) = &mut self.requested {
@@ -4562,3 +4565,6 @@ mod tests {
         assert!((lifetime_alpha(a, 40, 40, 0.0) - 0.6).abs() < 1e-6);
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/catch.rs");

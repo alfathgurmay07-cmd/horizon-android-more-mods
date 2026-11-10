@@ -1,0 +1,535 @@
+[mod]
+id = "horizon_physics"
+version = "0.20.7"
+priority = 100
+
+[compatibility]
+horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
+
+# The solver, the pieces and the settings. In the client library, so the mob hooks there and the
+# game's hooks can both reach it.
+[[module]]
+id = "runtime"
+file = "crates/horizon-client/src/client_lib.rs"
+name = "native_horizon_physics"
+source = "runtime.rs"
+visibility = "pub"
+
+# The quick setup on the title screen: drawing it (the previews and the HUD).
+[[module]]
+id = "setup"
+file = "crates/horizon-client/src/client_lib.rs"
+name = "native_horizon_physics_setup"
+source = "setup.rs"
+visibility = "pub"
+
+# Options > Mods: the row and its settings page.
+[[injection]]
+id = "listed"
+hook = "mods"
+hook_version = 1
+kind = "HEAD"
+helper = "listed.rs"
+bindings = [{ name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" }]
+
+[[injection]]
+id = "settings"
+hook = "settings"
+hook_version = 1
+kind = "HEAD"
+helper = "settings.rs"
+bindings = [
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>", value = "&mut *buttons" },
+]
+
+[[injection]]
+id = "settings-click"
+hook = "settings_click"
+hook_version = 1
+kind = "HEAD"
+helper = "settings_click.rs"
+bindings = [
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "button", ty = "usize", value = "button" },
+]
+
+# Player.attack: a ragdoll or piece in front of the player is knocked away by the hit.
+[[injection]]
+id = "attack"
+kind = "HEAD"
+target = "horizon_client::game::Game<'_>::attack"
+helper = "attack.rs"
+bindings = [{ name = "game", ty = "&crate::game::Game<'_>", value = "&*self" }]
+
+# BannerRenderer as cloth: the flag bends in the wind (re-entrant: the hook draws the banner itself).
+[[injection]]
+id = "banner"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::block_entity_render::BlockEntityRenderer::render_one"
+helper = "banner.rs"
+bindings = [
+  { name = "this", ty = "&BlockEntityRenderer", value = "self" },
+  { name = "scene", ty = "&Scene<'_>", value = "scene" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "kind", ty = "&Kind", value = "kind" },
+  { name = "base", ty = "Mat4", value = "base" },
+  { name = "packed", ty = "u8", value = "packed" },
+  { name = "lights", ty = "(Vec3, Vec3)", value = "lights" },
+  { name = "crumbling", ty = "bool", value = "crumbling" },
+  { name = "world_chests", ty = "bool", value = "world_chests" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# Camera.setup on the waves: in a boat or swimming at the surface, the eye rides the swell.
+[[injection]]
+id = "camera"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::perspective::Game<'_>::camera_view"
+helper = "camera.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "partial", ty = "f32", value = "partial" },
+]
+
+# The player's own model in a boat on the waves: moved with the boat and the camera.
+[[injection]]
+id = "player-model"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::perspective::Game<'_>::player_model_geometry"
+helper = "player_model.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+  { name = "out", ty = "&mut Vec<horizon_client::mesher::Vertex>", value = "&mut *out" },
+]
+
+# ServerPlayerGameMode.destroyBlock, then what the broken block held up falls (trees, bridges).
+[[injection]]
+id = "collapse"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::break_block"
+helper = "collapse.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+]
+
+# ClientLevel.addDestroyBlockEffect: the block crumbles into pieces instead of particles.
+[[injection]]
+id = "destroy"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::destroy_particles"
+helper = "destroy.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "state", ty = "BlockStateId", value = "state" },
+]
+
+# A dying mob is drawn once more into the buffer, its parts are cut out and turned into a ragdoll;
+# the mob itself is not drawn any more.
+[[injection]]
+id = "mob"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_lib::mobs::render::render_with"
+helper = "mob.rs"
+bindings = [
+  { name = "m", ty = "&Mob", value = "m" },
+  { name = "alpha", ty = "f32", value = "alpha" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "atlas", ty = "Atlas", value = "atlas" },
+  { name = "light", ty = "u32", value = "light" },
+  { name = "data", ty = "&MobData", value = "data" },
+  { name = "extra", ty = "&[(&Part, [f32; 4], u32, u32, bool)]", value = "extra" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# Where each model part starts, while a dying mob is captured.
+[[injection]]
+id = "part"
+kind = "HEAD"
+target = "horizon_client_lib::mobs::render::draw_normals"
+helper = "part.rs"
+bindings = [{ name = "out", ty = "&Vec<Vertex>", value = "&*out" }]
+
+# Once a frame, beside the other camera-relative entity geometry: step and draw the pieces.
+[[injection]]
+id = "world"
+kind = "HEAD"
+target = "horizon_client::game::end::Game<'_>::end_geometry"
+helper = "world.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# ItemEntityRenderer: dropped items tumble and lie flat instead of bobbing and spinning.
+[[injection]]
+id = "items"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::item_draw::Game<'_>::dropped_item_geometry"
+helper = "items.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# ClientPacketListener.handleExplosion: a fireball, sparks and smoke; the blast throws its blocks.
+[[injection]]
+id = "explode"
+kind = "HEAD"
+target = "horizon_client::game::lan_particles::Game<'_>::remote_explode"
+helper = "explode.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "p", ty = "&play::Explode", value = "p" },
+]
+
+# A block the server turns to air, read while it is still there (an explosion's blocks).
+[[injection]]
+id = "aired"
+kind = "HEAD"
+target = "horizon_client::game::remote::Game<'_>::server_block"
+helper = "aired.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "state", ty = "i32", value = "state" },
+]
+
+# LeashFeatureRenderer: leads as ropes (the knots are kept).
+[[injection]]
+id = "leads"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::leads::Game<'_>::leash_geometry"
+helper = "leads.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# Boats ride the waves.
+[[injection]]
+id = "boats"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::boats::Game<'_>::boat_geometry"
+helper = "boats.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# FishingHookRenderer's bobber rides the waves: lifted and moved with the swell under it, the
+# way the boats are.
+[[injection]]
+id = "bobber"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::fishing::Game<'_>::fishing_geometry"
+helper = "bobber.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "camera", ty = "glam::DVec3", value = "camera" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# FishingHookRenderer's line as a rope.
+[[injection]]
+id = "fishing"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::fishing::Game<'_>::fishing_line"
+helper = "fishing.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
+  { name = "alpha", ty = "f64", value = "alpha" },
+  { name = "size", ty = "[u32; 2]", value = "size" },
+]
+
+# CapeLayer: the cape as cloth.
+[[injection]]
+id = "cape"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_lib::mobs::render::cape"
+helper = "cape.rs"
+bindings = [
+  { name = "m", ty = "&Mob", value = "m" },
+  { name = "alpha", ty = "f32", value = "alpha" },
+  { name = "base", ty = "glam::Mat4", value = "base" },
+  { name = "uv", ty = "[f32; 4]", value = "uv" },
+  { name = "light", ty = "u32", value = "light" },
+  { name = "data", ty = "&MobData", value = "data" },
+  { name = "out", ty = "&mut Vec<Vertex>", value = "&mut *out" },
+]
+
+# Vanilla's campfire smoke and fire's large smoke give way to the mod's.
+[[injection]]
+id = "campfire-smoke"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_lib::animate_tick::make_campfire_smoke"
+helper = "campfire_smoke.rs"
+bindings = [{ name = "pos", ty = "[i32; 3]", value = "pos" }]
+
+[[injection]]
+id = "fire-smoke"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_lib::animate_tick::add"
+helper = "fire_smoke.rs"
+bindings = [{ name = "ty", ty = "T", value = "ty" }]
+
+# In the renderer: the waves and sway, beside the renderer's own code.
+[[module]]
+id = "sway"
+file = "crates/horizon-client-render/src/lib.rs"
+name = "native_horizon_physics_sway"
+source = "sway.rs"
+visibility = "pub"
+
+# The water's surface corners get a mark of how open the water is there, for the waves, and
+# snow someone walked through gets its pressed top.
+[[injection]]
+id = "fluid"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::mesher::Mesher<'_>::mesh_reusing"
+helper = "fluid.rs"
+bindings = [
+  { name = "mesher", ty = "&mut Mesher<'_>", value = "&mut *self" },
+  { name = "region", ty = "&[[Option<&Chunk>; 3]; 3]", value = "region" },
+  { name = "sy", ty = "i32", value = "sy" },
+  { name = "out", ty = "&mut SectionMesh", value = "&mut out" },
+  { name = "scratch", ty = "&mut MeshScratch", value = "&mut *scratch" },
+]
+
+# A Horizon shader pack's terrain shader, with the waves and sway. Hooked on `module`, which builds
+# the pack's material module: `shader_source` takes its stage flags as a destructured tuple now,
+# and a binding cannot name those.
+[[injection]]
+id = "shader"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::gfx::native_material::module"
+helper = "shader.rs"
+bindings = [
+  { name = "stage", ty = "&horizon_shader_api::check::CheckedStage", value = "stage" },
+  { name = "tags", ty = "&[(u32, u32)]", value = "tags" },
+  { name = "materials", ty = "&[(u32, u32)]", value = "materials" },
+  { name = "vertex", ty = "bool", value = "vertex" },
+  { name = "displaced", ty = "bool", value = "displaced" },
+  { name = "api", ty = "horizon_shader_api::Api", value = "api" },
+]
+
+# DirectX 12 (FXC): Horizon's own terrain shader made ready for FXC before the renderer builds
+# it; the game crashed at its start there.
+[[injection]]
+id = "fxc"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::gfx::reuse::On<'_>::create_shader_module"
+helper = "fxc.rs"
+bindings = [
+  { name = "this", ty = "&On<'_>", value = "self" },
+  { name = "descriptor", ty = "&wgpu::ShaderModuleDescriptor<'_>", value = "&descriptor" },
+]
+
+# No shader pack picked: the mod's own vanilla-look pack runs, so the waves and sway can.
+[[injection]]
+id = "builtin"
+kind = "HEAD"
+target = "horizon_client::game::shader_packs::Game<'_>::shader_pack_inputs"
+helper = "builtin.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+# Before the game checks its Horizon shader pack: hand the renderer the sprite layers and settings,
+# and build the pack again when they changed.
+[[injection]]
+id = "shader-pack"
+kind = "HEAD"
+target = "horizon_client::game::native_shaders::Game<'_>::tick_native_shader_pack"
+helper = "shader_pack.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+# The quick setup: the settings read as the game starts, then the title screen's place and its
+# presses while it has not been done. Before other mods' title hooks (higher priority runs first),
+# so nothing is drawn over it.
+[[injection]]
+id = "setup-load"
+hook = "frame"
+hook_version = 1
+kind = "HEAD"
+helper = "setup_load.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+[[injection]]
+id = "setup-draw"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client_lib::title::Title::draw"
+helper = "setup_draw.rs"
+bindings = [
+  { name = "_title", ty = "&Title", value = "self" },
+  { name = "atlas", ty = "&HudAtlas", value = "atlas" },
+  { name = "batch", ty = "&mut HudBatch", value = "&mut *batch" },
+  { name = "cursor", ty = "(f32, f32)", value = "cursor" },
+  { name = "_hide_splash", ty = "bool", value = "hide_splash" },
+]
+
+[[injection]]
+id = "setup-click"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client_lib::title::Title::click"
+helper = "setup_click.rs"
+bindings = [
+  { name = "_title", ty = "&mut Title", value = "&mut *self" },
+  { name = "x", ty = "f32", value = "x" },
+  { name = "y", ty = "f32", value = "y" },
+  { name = "size", ty = "(f32, f32)", value = "size" },
+]
+
+# The game's particles as physics pieces: where each comes from (crack, sprint dust, eating or a
+# broken item), and the particle engine handing them over.
+[[injection]]
+id = "crack"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::Game<'_>::crack_particle"
+helper = "crack.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "face", ty = "[i32; 3]", value = "face" },
+  { name = "state", ty = "BlockStateId", value = "state" },
+]
+
+[[injection]]
+id = "sprint"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::client_ambient::Game<'_>::sprint_dust"
+helper = "sprint.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+[[injection]]
+id = "eat"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::item_particles::Game<'_>::eat_particles"
+helper = "eat.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "stack", ty = "&ItemStack", value = "stack" },
+  { name = "count", ty = "u32", value = "count" },
+]
+
+[[injection]]
+id = "catch"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::particles::ParticleEngine::add_with"
+helper = "catch.rs"
+bindings = [
+  { name = "options", ty = "&ParticleOptions", value = "options" },
+  { name = "p", ty = "[f64; 3]", value = "p" },
+  { name = "v", ty = "[f64; 3]", value = "v" },
+]
+
+# Options' first page: the "Physics Settings..." button.
+[[injection]]
+id = "options-layout"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::options_ui::OptionsUi::layout"
+helper = "options_layout.rs"
+bindings = [
+  { name = "ui", ty = "&mut OptionsUi", value = "&mut *self" },
+  { name = "s", ty = "&Settings", value = "s" },
+  { name = "w", ty = "f32", value = "w" },
+  { name = "h", ty = "f32", value = "h" },
+]
+
+# The Physics Settings screen: drawn in place of the Options screen while it is open, and the
+# Options screen's mouse, drag, wheel and keys are its own then. Before other mods' hooks of the
+# Options screen (higher priority runs first).
+[[injection]]
+id = "options-draw"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client::game::options::Game<'_>::draw_options"
+helper = "options_draw.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut HudBatch", value = "&mut *batch" },
+]
+
+[[injection]]
+id = "options-mouse"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client::game::options::Game<'_>::options_mouse"
+helper = "options_mouse.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "pressed", ty = "bool", value = "pressed" },
+  { name = "right", ty = "bool", value = "right" },
+]
+
+[[injection]]
+id = "options-drag"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client::game::options::Game<'_>::options_drag"
+helper = "options_drag.rs"
+bindings = [{ name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" }]
+
+[[injection]]
+id = "options-scroll"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client::game::options::Game<'_>::options_scroll"
+helper = "options_scroll.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "amount", ty = "f32", value = "amount" },
+]
+
+[[injection]]
+id = "options-key"
+kind = "HEAD"
+cancellable = true
+priority = 200
+target = "horizon_client::game::options::Game<'_>::options_key"
+helper = "options_key.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "KeyCode", value = "key" },
+  { name = "text", ty = "Option<&str>", value = "text" },
+]

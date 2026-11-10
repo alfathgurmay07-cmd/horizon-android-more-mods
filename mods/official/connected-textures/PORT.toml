@@ -1,6 +1,6 @@
 id = "connected_textures"
 name = "Connected Textures"
-version = "0.1.2"
+version = "0.1.7"
 kind = "android_static_native"
-source_archive = "connected_textures-0.1.2.hnmod"
+source_archive = "connected_textures-0.1.7.hnmod"
 menu_entry = "Options > Mods"

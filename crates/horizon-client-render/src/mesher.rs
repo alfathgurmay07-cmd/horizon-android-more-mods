@@ -1099,6 +1099,18 @@ impl Mesher<'_> {
         mut out: SectionMesh,
         scratch: &mut MeshScratch,
     ) -> SectionMesh {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(done) =
+            horizon_physics_fluid(self, region, sy, &mut out, scratch)
+        {
+            return done;
+        }
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(done) =
+            connected_textures_mesh(self, region, sy, &mut out, scratch)
+        {
+            return done;
+        }
         out.clear();
         let center = region[1][1].expect("centre chunk");
         let section = &center.sections[sy as usize];
@@ -1351,3 +1363,9 @@ pub type Region = [[Option<Arc<Chunk>>; 3]; 3];
 pub fn borrow(region: &Region) -> [[Option<&Chunk>; 3]; 3] {
     std::array::from_fn(|z| std::array::from_fn(|x| region[z][x].as_deref()))
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/fluid.rs");
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/connected-textures/mixins/connected_textures/mesh.rs");

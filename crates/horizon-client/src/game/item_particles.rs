@@ -21,6 +21,9 @@ impl Game<'_> {
     /// `LivingEntity.spawnItemParticles(stack, count)` for the local player,
     /// drawing from the world random as its eating sounds do.
     pub(super) fn eat_particles(&mut self, stack: &ItemStack, count: u32) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_eat(self, stack, count) { return; }
+
         let Some(p) = self.player.as_ref().map(|p| p.position) else {
             return;
         };
@@ -128,3 +131,6 @@ impl Game<'_> {
         }
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/eat.rs");

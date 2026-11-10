@@ -243,6 +243,9 @@ impl Game<'_> {
     /// position, yaw and pitch to render from.
     pub(super) fn camera_view(&mut self, partial: f32) -> Option<(glam::DVec3, f32, f32)> {
         #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(view) = horizon_physics_camera(self, partial) { return view; }
+
+        #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(view) = super::freecam_hooks::camera(partial) {
             return view;
         }
@@ -613,6 +616,9 @@ impl Game<'_> {
         alpha: f64,
         out: &mut Vec<horizon_client::mesher::Vertex>,
     ) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_player_model(self, camera, alpha, out) { return; }
+
         if !self.player_model_shown() {
             return;
         }
@@ -1512,3 +1518,8 @@ mod preview_tests {
         );
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/camera.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/player_model.rs");

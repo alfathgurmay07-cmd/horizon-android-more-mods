@@ -1,0 +1,8 @@
+id = "horizon_physics"
+name = "Horizon Physics"
+version = "0.20.7"
+kind = "android_static_native"
+source_archive = "horizon_physics-0.20.7.hnmod"
+menu_entry = "Options > Mods"
+horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
+mixins_revision = "d9c83d7096b7ea5b83678da2efdfd6161f74997e"

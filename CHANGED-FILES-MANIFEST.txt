@@ -1,59 +1,131 @@
-HORIZON PUNCHY CUMULATIVE DELTA
-Base: horizon-android-more-mods-android (6).zip
-Scope: only files added or modified relative to the original source archive.
-Modified files: 18
-Added files: 3
+HORIZON ANDROID CUMULATIVE SOURCE DELTA
+Baseline: horizon-android-more-mods-android.zip
+Target: current source after Connected Textures, Horizon Physics, Punchy Moves,
+and first-person motion transfer into Punchy.
+
+Modified files: 38
+Added files: 58
 Removed files: 0
 
-BUILT-IN RESOURCE PACK ARCHITECTURE
-Punchy Built-in Animations is installed at assets/minecraft/resourcepacks/punchy.zip when the Punchy mod is enabled.
-The pack is required and pinned at the bottom of the active resource-pack stack.
-Player-selected resource packs are layered above it; matching custom asset paths override built-in assets.
-The built-in archive contains pack.mcmeta, the default Punchy animation JSON, player geometry, and tuning template.
+PUNCHY FIRST-PERSON OWNERSHIP
+Punchy now owns first-person procedural hand motion. Its runtime samples player
+movement and applies the HandMotion layer to first-person arm/item poses.
+Punchy Moves no longer owns first-person arm/item transforms or first-person
+motion settings; it remains responsible for third-person player motion and
+elytra trails. The existing Punchy action/item animation system remains intact.
+
+APPLICATION
+Extract this archive into the original project root and allow it to overwrite
+the listed files. This is a delta archive, not a full source project. No source
+files were deleted from the baseline.
+
+VALIDATION
+Focused integration tests: 11 passed.
+Expanded Punchy checks: 37 passed; one existing baseline assertion was excluded
+because it expects transform_for(&context, left, true), which is absent in the
+original baseline runtime as well.
+Rust/Android compilation was not run because cargo, rustc and rustfmt are absent
+from the editing environment.
 
 MODIFIED FILES
-crates/horizon-client-render/src/mod_list.rs
+CHANGED-FILES-MANIFEST.txt
+crates/horizon-client-render/src/block_entity_render.rs
+crates/horizon-client-render/src/gfx/native_material.rs
+crates/horizon-client-render/src/lib.rs
+crates/horizon-client-render/src/mesher.rs
 crates/horizon-client-render/src/options_ui.rs
-crates/horizon-client-render/src/packs.rs
-crates/horizon-client-render/src/packs/cache.rs
+crates/horizon-client-render/src/particles.rs
+crates/horizon-client/src/animate_tick.rs
 crates/horizon-client/src/game.rs
 crates/horizon-client/src/game/android_bundled.rs
-crates/horizon-client/src/game/native_hooks.rs
+crates/horizon-client/src/game/boats.rs
+crates/horizon-client/src/game/client_ambient.rs
+crates/horizon-client/src/game/end.rs
+crates/horizon-client/src/game/fishing.rs
+crates/horizon-client/src/game/item_draw.rs
+crates/horizon-client/src/game/item_particles.rs
+crates/horizon-client/src/game/lan_particles.rs
+crates/horizon-client/src/game/leads.rs
+crates/horizon-client/src/game/native_shaders.rs
 crates/horizon-client/src/game/options.rs
-crates/horizon-client/src/game/packs.rs
-crates/horizon-client/src/game/startup_menu.rs
+crates/horizon-client/src/game/perspective.rs
+crates/horizon-client/src/game/remote.rs
+crates/horizon-client/src/game/shader_packs.rs
+crates/horizon-client/src/lib.rs
+crates/horizon-client/src/mobs.rs
+crates/horizon-client/src/mobs/anim.rs
+crates/horizon-client/src/mobs/render.rs
+crates/horizon-client/src/title.rs
+docs/hnmod-android-port.md
+mods/official/connected-textures/PORT.toml
+mods/official/connected-textures/README.md
+mods/official/connected-textures/src/native_connected_textures.rs
 mods/official/punchy/README.md
 mods/official/punchy/mixins/punchy/README.md
-mods/official/punchy/mixins/punchy/engine/attachments.rs
 mods/official/punchy/mixins/punchy/engine/engine.rs
-mods/official/punchy/mixins/punchy/engine/resources.rs
 mods/official/punchy/mixins/punchy/runtime.rs
-packaging/android/res/drawable-nodpi/launcher_icon.png
-tests/test_punchy_resourcepack_hand_editor.py
+tests/test_punchy_hand_motion_rewrite.py
+tools/check_hnmod_official_layout.py
 
 ADDED FILES
-mods/official/punchy/mixins/punchy/engine/data/punchy_builtin.zip
-tests/test_punchy_hand_editor_ui_icon.py
-tests/test_punchy_resourcepack_inspect_regressions.py
+mods/official/connected-textures/mixins/connected_textures/mesh.rs
+mods/official/horizon-physics/PORT.toml
+mods/official/horizon-physics/README.md
+mods/official/horizon-physics/horizon-native.json
+mods/official/horizon-physics/mixins/horizon_physics/aired.rs
+mods/official/horizon-physics/mixins/horizon_physics/attack.rs
+mods/official/horizon-physics/mixins/horizon_physics/banner.rs
+mods/official/horizon-physics/mixins/horizon_physics/boats.rs
+mods/official/horizon-physics/mixins/horizon_physics/bobber.rs
+mods/official/horizon-physics/mixins/horizon_physics/builtin.rs
+mods/official/horizon-physics/mixins/horizon_physics/camera.rs
+mods/official/horizon-physics/mixins/horizon_physics/campfire_smoke.rs
+mods/official/horizon-physics/mixins/horizon_physics/cape.rs
+mods/official/horizon-physics/mixins/horizon_physics/catch.rs
+mods/official/horizon-physics/mixins/horizon_physics/collapse.rs
+mods/official/horizon-physics/mixins/horizon_physics/crack.rs
+mods/official/horizon-physics/mixins/horizon_physics/destroy.rs
+mods/official/horizon-physics/mixins/horizon_physics/eat.rs
+mods/official/horizon-physics/mixins/horizon_physics/explode.rs
+mods/official/horizon-physics/mixins/horizon_physics/fire_smoke.rs
+mods/official/horizon-physics/mixins/horizon_physics/fishing.rs
+mods/official/horizon-physics/mixins/horizon_physics/fluid.rs
+mods/official/horizon-physics/mixins/horizon_physics/fxc.rs
+mods/official/horizon-physics/mixins/horizon_physics/horizon-mixin.toml
+mods/official/horizon-physics/mixins/horizon_physics/items.rs
+mods/official/horizon-physics/mixins/horizon_physics/leads.rs
+mods/official/horizon-physics/mixins/horizon_physics/listed.rs
+mods/official/horizon-physics/mixins/horizon_physics/mob.rs
+mods/official/horizon-physics/mixins/horizon_physics/options_drag.rs
+mods/official/horizon-physics/mixins/horizon_physics/options_draw.rs
+mods/official/horizon-physics/mixins/horizon_physics/options_key.rs
+mods/official/horizon-physics/mixins/horizon_physics/options_layout.rs
+mods/official/horizon-physics/mixins/horizon_physics/options_mouse.rs
+mods/official/horizon-physics/mixins/horizon_physics/options_scroll.rs
+mods/official/horizon-physics/mixins/horizon_physics/part.rs
+mods/official/horizon-physics/mixins/horizon_physics/player_model.rs
+mods/official/horizon-physics/mixins/horizon_physics/runtime.rs
+mods/official/horizon-physics/mixins/horizon_physics/settings.rs
+mods/official/horizon-physics/mixins/horizon_physics/settings_click.rs
+mods/official/horizon-physics/mixins/horizon_physics/setup.rs
+mods/official/horizon-physics/mixins/horizon_physics/setup_click.rs
+mods/official/horizon-physics/mixins/horizon_physics/setup_draw.rs
+mods/official/horizon-physics/mixins/horizon_physics/setup_load.rs
+mods/official/horizon-physics/mixins/horizon_physics/shader.rs
+mods/official/horizon-physics/mixins/horizon_physics/shader_pack.rs
+mods/official/horizon-physics/mixins/horizon_physics/sprint.rs
+mods/official/horizon-physics/mixins/horizon_physics/sway.rs
+mods/official/horizon-physics/mixins/horizon_physics/world.rs
+mods/official/punchy-moves/LICENSE
+mods/official/punchy-moves/NOTICE.md
+mods/official/punchy-moves/PORT.toml
+mods/official/punchy-moves/README.md
+mods/official/punchy-moves/horizon-native.json
+mods/official/punchy-moves/mixins/punchy_moves/rig.rs
+mods/official/punchy-moves/mixins/punchy_moves/runtime.rs
+mods/official/punchy-moves/mixins/punchy_moves/trails.rs
+mods/official/punchy-moves/original/livingmotion-1.2.0.hnmod
+tests/test_punchy_moves_android_wiring.py
 
 REMOVED FILES
 (none)
-
-VALIDATION
-22 focused Python tests passed: resource-pack loading/priority, compatibility, Inspect Pickaxe, and Hand Editor parity.
-Rust compilation and Android APK build were not run because Rust toolchain is unavailable in the environment.
-
-CI COMPILE FIX (WORKFLOW RUN 42722480965)
-crates/horizon-client-render/src/options_ui.rs: moved NativeSlider event variant to Event and removed unused Act::NativeSlider variant. The native slider handler already exists in crates/horizon-client/src/game/options.rs; startup-menu event handling is also present. Android compilation also requires the NativeSlider type to be referenced through the direct dependency path horizon_client_render::mod_list::NativeSlider in android_bundled.rs and Punchy runtime.rs; crate::mod_list resolves against the Android crate root and is unavailable there.
-
-CURRENT REGRESSION CHECKS
-tests/test_punchy_resourcepack_hand_editor.py: 9 passed
-tests/test_punchy_hand_editor_ui_icon.py: 3 passed
-tests/test_punchy_resourcepack_inspect_regressions.py: 5 passed
-Total in this rerun: 17 passed. Rust/Android build not run locally because rustc/cargo are unavailable in the packaging environment.
-
-HAND EDITOR SCREEN SEPARATION
-The Punchy native settings page now contains only general Punchy settings, key binds, status, and a dedicated Open Hand Editor navigation button. The editor controls are rendered on a separate Page::PunchyHandEditor page with Hand, Edit target, Applies to, selector chips, transform sections/sliders, pose actions, and profile/group actions. The editor footer uses Back to Punchy and returns to the previous Punchy settings page. A Rust UI regression test covers opening the child page, keeping transform sliders off the parent page, and returning.
-
-LATEST VALIDATION
-17 focused Python tests passed: Hand Editor UI/icon, resource-pack/Hand Editor, and Inspect Pickaxe regressions. The new Rust UI regression test was added but not run because rustc/cargo are unavailable in this packaging environment. Android APK build was not run.

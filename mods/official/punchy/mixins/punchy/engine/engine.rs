@@ -1404,6 +1404,9 @@ mod jar_parity {
 #[path = "tuning.rs"]
 pub mod tuning;
 
+#[path = "hand_motion.rs"]
+pub mod hand_motion;
+
 #[path = "horizon_pose.rs"]
 pub mod horizon_pose;
 

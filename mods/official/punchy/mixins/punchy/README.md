@@ -4,6 +4,7 @@ Dit is **geen volledige port van Punchy 3.1b**. De originele JAR is geïnventari
 
 ## Wat er nu staat
 
+- Een procedurele first-person bewegingslaag in de Punchy-runtime: idle, lopen/sprinten, springen/landen, vliegen, zwemmen, klimmen/kruipen, paardrijden en roeien. Punchy Moves beheert geen first-person arm- of itemtransformaties meer.
 - Een zelfstandige Rust-animatiekern: clipformaat, expressies, 30 easingcurves, onafhankelijke kanalen, legacy/v2-coördinaten, pre/post-rotaties, interpolatie, effecten, geluidscursor en onderbroken crossfades.
 - Actiecoördinatie en een gedeeltelijke implementatie van attack/mining/equip/inspect/bow/crossbow/shield/trident/spear/eat/drink.
 - Parsing van Punchy's tuningtemplate, handed clipselectie, combo's en een deel van item/group-configuratie.

@@ -1341,6 +1341,9 @@ impl Game<'_> {
     }
     /// AbstractBoatRenderer.
     pub(super) fn boat_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_boats(self, camera, alpha, out) { return; }
+
         let a = alpha as f32;
         let range = super::entity_culling::default_range(
             glam::DVec3::new(WIDTH, HEIGHT, WIDTH),
@@ -1545,3 +1548,6 @@ mod tests {
         assert_eq!(b.bubble_angle(0.5), 0.0);
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/boats.rs");

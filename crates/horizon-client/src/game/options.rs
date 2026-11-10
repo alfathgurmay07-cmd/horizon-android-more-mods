@@ -184,6 +184,9 @@ impl Game<'_> {
     }
     pub(super) fn draw_options(&mut self, batch: &mut HudBatch) {
         #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_options_draw(self, batch) { return; }
+
+        #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(()) = basic_hud_draw_options(self, batch) {
             return;
         }
@@ -230,6 +233,9 @@ impl Game<'_> {
     }
     pub(super) fn options_mouse(&mut self, pressed: bool, right: bool) -> Result<()> {
         #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(result) = horizon_physics_options_mouse(self, pressed, right) { return result; }
+
+        #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(result) = basic_hud_options_mouse(self, pressed, right) {
             return result;
         }
@@ -265,6 +271,9 @@ impl Game<'_> {
     }
     pub(super) fn options_drag(&mut self) -> Result<()> {
         #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(result) = horizon_physics_options_drag(self) { return result; }
+
+        #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(result) = basic_hud_options_drag(self) {
             return result;
         }
@@ -287,6 +296,9 @@ impl Game<'_> {
         self.handle_option_events(events)
     }
     pub(super) fn options_key(&mut self, key: KeyCode, text: Option<&str>) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(result) = horizon_physics_options_key(self, key, text) { return result; }
+
         #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(result) = basic_hud_options_key(self, key, text) {
             return result;
@@ -317,6 +329,9 @@ impl Game<'_> {
             .shortcut(&self.gui.atlas, shortcut, &mut self.clipboard)
     }
     pub(super) fn options_scroll(&mut self, amount: f32) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(result) = horizon_physics_options_scroll(self, amount) { return result; }
+
         #[cfg(target_os = "android")]
         if let std::ops::ControlFlow::Break(result) = basic_hud_options_scroll(self, amount) {
             return result;
@@ -672,3 +687,14 @@ fn windowed_again(w: &winit::window::Window) {
         ));
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/options_draw.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/options_mouse.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/options_drag.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/options_key.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/options_scroll.rs");

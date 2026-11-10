@@ -47,6 +47,7 @@ struct State {
     main_left: bool,
     render_alpha: f32,
     enabled: bool,
+    hand_motion: punchy_engine::hand_motion::HandMotion,
     tuning: Option<punchy_engine::tuning::Tuning>,
     status: String,
     render_count: u64,
@@ -524,6 +525,49 @@ fn tuning_animation(
     )
 }
 
+fn hand_motion_input(game: &Game<'_>) -> Option<punchy_engine::hand_motion::Input> {
+    let player = game.player.as_ref()?;
+    let riding_horse = game
+        .riding
+        .and_then(|id| game.mobs.iter().find(|mob| mob.id == id))
+        .is_some_and(|mob| horizon_client::mobs::equine::is_equine(mob.species()));
+    let rowing = game
+        .riding
+        .and_then(|id| game.boats.iter().find(|boat| boat.id == id))
+        .is_some_and(|boat| boat.paddling.iter().any(|paddling| *paddling));
+    let swimming_pose = player.pose == horizon_client::pose::Pose::Swimming;
+    let swimming = player.swimming || (swimming_pose && player.fluids.was_touching_water);
+    let crawling = swimming_pose && !player.fluids.was_touching_water;
+    let horizontal_speed = (player.velocity.x * player.velocity.x
+        + player.velocity.z * player.velocity.z)
+        .sqrt() as f32;
+    Some(punchy_engine::hand_motion::Input {
+        dt: 1.0 / 20.0,
+        forward: player.applied_input[1],
+        strafe: player.applied_input[0],
+        horizontal_speed,
+        velocity_x: player.velocity.x as f32,
+        velocity_z: player.velocity.z as f32,
+        vertical_speed: player.velocity.y as f32,
+        fall_distance: player.fall_distance as f32,
+        yaw: game.yaw,
+        pitch: game.pitch,
+        grounded: player.ground.on_ground,
+        sprinting: player.sprinting,
+        sneaking: player.shift_key_down,
+        swimming,
+        fall_flying: player.fall_flying,
+        flying: player.flying,
+        spectator: player.spectator,
+        passenger: player.is_passenger,
+        sleeping: player.sleeping || game.sleeping.is_some(),
+        climbing: player.last_climbable.is_some(),
+        crawling,
+        riding_horse,
+        rowing,
+    })
+}
+
 pub(super) fn tick(game: &mut Game<'_>) {
     if !game.native_window() {
         return;
@@ -538,6 +582,7 @@ pub(super) fn tick(game: &mut Game<'_>) {
             s.forced_stack = None;
             s.successful_use.clear();
             s.mining_attempt = false;
+            s.hand_motion = Default::default();
             s.previous_swings = game.swings_started;
         });
         return;
@@ -555,6 +600,11 @@ pub(super) fn tick(game: &mut Game<'_>) {
     let speed = global_speed(game);
     STATE.with(|cell| {
         let mut s=cell.borrow_mut();load(game, &mut s);
+        if let Some(input) = hand_motion_input(game) {
+            s.hand_motion.tick(input);
+        } else {
+            s.hand_motion = Default::default();
+        }
         if s.source.is_none() {return;}
         s.main_left=game.settings.main_hand_left;
         s.offhand_item=items[1].is_some();
@@ -1233,6 +1283,47 @@ pub(super) fn arms(game: &mut Game<'_>, alpha: f64, out: &mut Vec<Vertex>) {
     });
 }
 
+fn action_owns_arm(state: &State, left: bool) -> bool {
+    state.active.as_ref().is_some_and(|playback| {
+        let active_left = state.main_left != (playback.hand == action::Hand::Off);
+        active_left == left
+            || punchy_engine::policy::dual_handed(
+                &playback.clip,
+                playback.time,
+                state.offhand_item,
+                state.offhand_item,
+            )
+    })
+}
+
+fn motion_delta(state: &State, left: bool, alpha: f32) -> Mat4 {
+    let owns_arm = action_owns_arm(state, left);
+    let action_weight = if owns_arm {
+        state.active.as_ref().map_or(0.0, |playback| {
+            playback.previous_weight
+                + (playback.weight - playback.previous_weight) * alpha
+        })
+    } else {
+        0.0
+    };
+    let special_mode = matches!(
+        state.hand_motion.mode(),
+        punchy_engine::hand_motion::Mode::Climb
+            | punchy_engine::hand_motion::Mode::Crawl
+            | punchy_engine::hand_motion::Mode::Ride
+            | punchy_engine::hand_motion::Mode::RideIdle
+            | punchy_engine::hand_motion::Mode::Rowing
+    );
+    let influence = if owns_arm {
+        if special_mode { 0.62 } else { 0.45 }
+    } else {
+        1.0
+    };
+    state
+        .hand_motion
+        .matrix_with_influence(left, alpha, action_weight, influence)
+}
+
 pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
     STATE.with(|cell| {
         let mut s = cell.borrow_mut();
@@ -1250,6 +1341,10 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
         } else {
             [false, false]
         };
+        let motion = [
+            motion_delta(&s, false, s.render_alpha),
+            motion_delta(&s, true, s.render_alpha),
+        ];
         let mut authored = [None, None];
         if s.enabled && game.native_setting(ID, "hand_poses").as_deref() != Some("horizon") {
             if let (Some(source), Some(tuning)) = (&s.source, &s.tuning) {
@@ -1324,6 +1419,7 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
             authored,
             enabled: s.enabled,
             deltas,
+            motion,
             active,
         });
     });

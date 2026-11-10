@@ -2252,6 +2252,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         cursor: (f32, f32),
         hide_splash: bool,
     ) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_setup_draw(self, atlas, batch, cursor, hide_splash) { return; }
+
         self.draw_with_items(atlas, None, batch, cursor, hide_splash);
     }
     /// [`Title::draw`] with the item models, which draw the item icons of the
@@ -3113,6 +3116,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// The action and whether to play `AbstractWidget.playButtonClickSound`.
     /// Navigation buttons can return `Action::None` while still sounding.
     pub fn click(&mut self, x: f32, y: f32, size: (f32, f32)) -> (Action, bool) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(result) = horizon_physics_setup_click(self, x, y, size) { return result; }
+
         self.remember_direct_address();
         // The game rules take the press in `press_rules`, which has the atlas.
         if self.rules.get_mut().is_some()
@@ -4544,3 +4550,8 @@ mod classic_tests {
         }
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/setup_draw.rs");
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/setup_click.rs");

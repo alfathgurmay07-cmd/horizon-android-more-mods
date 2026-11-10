@@ -236,9 +236,37 @@ fn module(
     tags: &[(u32, u32)],
     materials: &[(u32, u32)],
 ) -> Result<naga::Module, String> {
+    #[cfg(target_os = "android")]
+    if let ::core::ops::ControlFlow::Break(module) = horizon_physics_shader(stage, vertex, tags, materials) { return module; }
+
     let text = shader_source(&stage.source, vertex, tags, materials);
     naga::front::wgsl::parse_str(&text)
         .map_err(|e| format!("{}: {}", stage.file, e.emit_to_string(&text)))
+}
+
+#[cfg(target_os = "android")]
+fn horizon_physics_shader(
+    stage: &CheckedStage,
+    vertex: Option<&CheckedStage>,
+    tags: &[(u32, u32)],
+    materials: &[(u32, u32)],
+) -> ::core::ops::ControlFlow<Result<naga::Module, String>> {
+    use crate::native_horizon_physics_sway as sway;
+    let source = stage.source.as_str();
+    let text = shader_source(source, vertex, tags, materials);
+    let patched = text
+        .strip_prefix(source)
+        .and_then(|rest| sway::patch(rest, source))
+        .map(|patched| format!("{source}{patched}"));
+    if let Some(patched) = patched {
+        if let Ok(module) = naga::front::wgsl::parse_str(&patched) {
+            return ::core::ops::ControlFlow::Break(Ok(module));
+        }
+    }
+    ::core::ops::ControlFlow::Break(
+        naga::front::wgsl::parse_str(&text)
+            .map_err(|e| format!("{}: {}", stage.file, e.emit_to_string(&text))),
+    )
 }
 
 impl NativeMaterial {

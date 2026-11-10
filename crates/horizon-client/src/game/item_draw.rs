@@ -403,6 +403,9 @@ impl Game<'_> {
         alpha: f64,
         out: &mut Vec<Vertex>,
     ) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_items(self, camera, alpha, out) { return; }
+
         let live = self.dropped.iter().map(|item| {
             let (p, q) = (item.previous, item.position);
             let at = [
@@ -516,3 +519,6 @@ mod tests {
         assert_eq!(use_duration(&Components::new()), 0);
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/items.rs");

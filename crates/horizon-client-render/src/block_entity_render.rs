@@ -1260,6 +1260,9 @@ impl BlockEntityRenderer {
         world_chests: bool,
         out: &mut Vec<Vertex>,
     ) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_banner(self, scene, pos, kind, base, packed, lights, crumbling, world_chests, out) { return; }
+
         let sprite = |name: &str| scene.sprites.get(name).copied();
         let paint = |name: &str, tint: u32, packed: u8| {
             let rect = if crumbling {
@@ -2575,3 +2578,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/banner.rs");

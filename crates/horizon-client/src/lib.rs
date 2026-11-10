@@ -70,6 +70,12 @@ pub mod game_rules_screen;
 #[cfg(target_os = "android")]
 #[path = "../../../mods/official/gyro/mixins/gyro/runtime.rs"]
 pub mod gyro;
+#[cfg(target_os = "android")]
+#[path = "../../../mods/official/horizon-physics/mixins/horizon_physics/runtime.rs"]
+pub mod native_horizon_physics;
+#[cfg(target_os = "android")]
+#[path = "../../../mods/official/horizon-physics/mixins/horizon_physics/setup.rs"]
+pub mod native_horizon_physics_setup;
 pub mod gizmos;
 pub mod gossip;
 pub mod health;

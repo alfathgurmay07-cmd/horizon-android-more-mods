@@ -1116,6 +1116,8 @@ pub fn base_transform_at(m: &Mob, alpha: f32, origin: glam::Mat4) -> glam::Mat4 
         }
     }
     base *= species_rotations(m, alpha);
+    #[cfg(target_os = "android")]
+    let base = super::punchy_moves::body(m, alpha, base);
     base *= glam::Mat4::from_scale(glam::Vec3::new(-1.0, -1.0, 1.0));
     base *= species_scale(m, alpha);
     base * glam::Mat4::from_translation(glam::Vec3::new(0.0, -1.501, 0.0))
@@ -1287,6 +1289,9 @@ fn draw_normals(
     overlay: u32,
     out: &mut Vec<Vertex>,
 ) {
+    #[cfg(target_os = "android")]
+    horizon_physics_part(out);
+
     let p = poses.pose(part);
     let m = base
         * glam::Mat4::from_translation(glam::Vec3::new(p[0], p[1], p[2]) / 16.0)
@@ -1360,6 +1365,9 @@ pub fn render_with(
     extra: &[(&Part, [f32; 4], u32, u32)],
     out: &mut Vec<Vertex>,
 ) {
+    #[cfg(target_os = "android")]
+    if let ::core::ops::ControlFlow::Break(()) = horizon_physics_mob(m, alpha, camera, atlas, light, data, extra, out) { return; }
+
     // The invisibility effect hides the model (a drinking wandering trader);
     // an illusioner shows its four mirror images instead.
     if super::trader::is_invisible(m) {
@@ -1401,6 +1409,9 @@ pub fn cape(
     data: &MobData,
     out: &mut Vec<Vertex>,
 ) {
+    #[cfg(target_os = "android")]
+    if let ::core::ops::ControlFlow::Break(()) = horizon_physics_cape(m, alpha, base, uv, light, data, out) { return; }
+
     let Some(model) = m.kind.layer("player#cape") else {
         return;
     };
@@ -2975,3 +2986,10 @@ mod scroll_tests {
         assert_eq!(leather_layer.color, abgr(0xA06540));
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/mob.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/part.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/cape.rs");

@@ -55,6 +55,9 @@ pub mod mesher;
 #[cfg(target_os = "android")]
 #[path = "../../../mods/official/connected-textures/src/native_connected_textures.rs"]
 pub mod native_connected_textures;
+#[cfg(target_os = "android")]
+#[path = "../../../mods/official/horizon-physics/mixins/horizon_physics/sway.rs"]
+pub mod native_horizon_physics_sway;
 pub mod minimap;
 pub mod mipmap;
 pub mod mod_list;

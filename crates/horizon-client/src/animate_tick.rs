@@ -535,6 +535,9 @@ impl AnimateContext<'_> {
 }
 
 fn add(engine: &mut ParticleEngine, ty: T, p: [f64; 3], v: [f64; 3]) {
+    #[cfg(target_os = "android")]
+    if let ::core::ops::ControlFlow::Break(()) = horizon_physics_fire_smoke(ty) { return; }
+
     engine.add(&ParticleOptions::simple(ty), p, v);
 }
 /// `Level.addAlwaysVisibleParticle`: still shown under the Minimal option now and then.
@@ -1938,6 +1941,9 @@ pub fn make_campfire_smoke(
     signal: bool,
     smoking: bool,
 ) {
+    #[cfg(target_os = "android")]
+    if let ::core::ops::ControlFlow::Break(()) = horizon_physics_campfire_smoke(pos) { return; }
+
     let r = engine.random();
     let sign = |r: &mut LegacyRandom| if r.next_boolean() { 1.0 } else { -1.0 };
     let dx = r.next_double() / 3.0;
@@ -2004,3 +2010,8 @@ mod tests {
         assert!((c[1] - (51.0 / 255.0)).abs() < 0.01);
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/fire_smoke.rs");
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/campfire_smoke.rs");

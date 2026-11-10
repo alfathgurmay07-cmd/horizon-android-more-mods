@@ -398,6 +398,9 @@ impl Game<'_> {
     /// `ClientPacketListener.handleExplosion`: the blast's particles (and its
     /// sound, when the packet carries it), then the player's push.
     pub(super) fn remote_explode(&mut self, p: &play::Explode) {
+        #[cfg(target_os = "android")]
+        horizon_physics_explode(self, p);
+
         if p.play_sound {
             let pitch = (1.0
                 + (self.particles.random().next_float() - self.particles.random().next_float())
@@ -718,3 +721,6 @@ mod tests {
         assert!(below, "DEFAULT is a Gaussian around the position");
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/explode.rs");

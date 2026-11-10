@@ -766,6 +766,9 @@ impl Game<'_> {
     /// FishingHookRenderer: the bobbers (this player's and the others' a
     /// server tracks), camera-facing half-block quads centred on the hooks.
     pub(super) fn fishing_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_bobber(self, camera, alpha, out) { return; }
+
         let hooks: Vec<glam::DVec3> = self
             .hook_position(alpha)
             .into_iter()
@@ -817,6 +820,9 @@ impl Game<'_> {
     /// from a quarter block above the hook to the rod in its owner's hand,
     /// `width` pixels wide (`Window.getAppropriateLineWidth`).
     pub(super) fn fishing_line(&self, alpha: f64, size: [u32; 2]) -> Vec<Line> {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(lines) = horizon_physics_fishing(self, alpha, size) { return lines; }
+
         let own = self
             .hook_position(alpha)
             .zip(self.rod_hand_position(alpha, size));
@@ -1359,3 +1365,8 @@ mod tests {
         assert_eq!(rebound(v, hit, Vec3::ZERO), Vec3::new(0.0, 0.0, -0.25));
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/bobber.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/fishing.rs");

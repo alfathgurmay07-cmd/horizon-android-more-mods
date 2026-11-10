@@ -21,7 +21,7 @@ adapted to this tree's current APIs.
   Rust port itself (its runtime identifies an MIT-licensed upstream dependency).
   Keep the port local until its author clarifies the port's license.
 
-### Connected Textures 0.1.2
+### Connected Textures 0.1.7
 
 - Moved the renderer runtime to `mods/official/connected-textures/src/native_connected_textures.rs`; the renderer imports it from `crates/horizon-client-render/src/lib.rs`.
 - Adapted its mesh pass to run on the current `Mesher::mesh_reusing` output, after
@@ -79,6 +79,17 @@ The packages below retain their original manifests and source. Basic HUD and Vis
 - The upstream package pins Horizon revision `c9d474dd9116e84c243f8992d75c11314df56f06`; the supplied bundle and Android source therefore still require a full Android compile to confirm API compatibility. The source package includes its MIT notice in the engine source.
 
 The two provided bundles pin different upstream Horizon commits. Basic HUD and Visuality have Android static adapters and separate Options > Mods rows. Android compilation, APK packaging and on-device behaviour have not been validated in this environment.
+
+
+### Punchy Moves 1.2.0 (ported from Living Motion)
+
+- The source is kept at `mods/official/punchy-moves/`; the in-game name is **Punchy Moves** and the native ID is `punchy_moves`. The existing `Punchy` mod remains a separate entry.
+- The animation rig is connected to player model setup and the player body transform. The Android game loop updates per-player motion state once per frame.
+- First-person arm, map and held-item transforms receive the mod's hand pose. Elytra contrails are appended to the world/entity geometry pass.
+- The mod has its own Options > Mods row, key bindings, settings page and persistent config directory.
+- Original source is retained in `mods/official/punchy-moves/original/livingmotion-1.2.0.hnmod`. The main code's MIT notice and the trail renderer's MPL-2.0 terms are retained in `LICENSE` and `NOTICE.md`.
+- The original HNMOD targets a different Horizon revision. Its injection manifest is preserved for provenance; the Android port uses static hooks adapted to this project's current source tree.
+- Rust compilation, APK packaging and device rendering are not verified in this environment.
 
 ## Not separately ported
 

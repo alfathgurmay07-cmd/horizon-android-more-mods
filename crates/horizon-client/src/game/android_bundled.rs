@@ -118,6 +118,15 @@ mod connected_textures_settings;
 mod connected_textures_click;
 
 #[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/listed.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/settings.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/settings_click.rs");
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/setup_load.rs");
+
+#[cfg(target_os = "android")]
 #[path = "android_bundled/zoom/runtime.rs"]
 pub(super) mod official_zoom;
 
@@ -225,6 +234,7 @@ pub(super) fn native_key(game: &mut Game<'_>, key: &str, pressed: bool) {
         accurate_block_placement_key::run(&mut *game, key, pressed);
         super::freecam_hooks::key(&mut *game, key, pressed);
         super::punchy::key(&mut *game, key, pressed);
+        super::punchy_moves::key(&mut *game, key, pressed);
         armorhud_key(&mut *game, key, pressed);
         basic_hud_key(&mut *game, key, pressed);
     }
@@ -256,6 +266,7 @@ pub(super) fn native_mods(game: &mut Game<'_>, mods: &mut Vec<NativeMod>) {
         smartf3_list::run(&mut *mods);
         accurate_block_placement_list::run(&mut *mods);
         connected_textures_list::run(&mut *mods);
+        horizon_physics_listed(&mut *mods);
         super::mod_appleskin_glue::on_list(&mut *mods);
         armorhud_listed(&mut *mods);
         jade_listed(&mut *mods);
@@ -263,6 +274,7 @@ pub(super) fn native_mods(game: &mut Game<'_>, mods: &mut Vec<NativeMod>) {
         basic_hud_listed(&mut *mods, &mut *game);
         visuality_listed(&mut *mods);
         super::freecam_hooks::list(&mut *mods);
+        super::punchy_moves::listed(&mut *mods);
         mods.push(NativeMod {
             id: super::punchy::ID.into(),
             title: super::punchy::TITLE.into(),
@@ -285,11 +297,13 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
         smartf3_settings::run(&mut *game, mod_id, &mut *buttons);
         accurate_block_placement_settings::run(&mut *game, mod_id, &mut *buttons);
         connected_textures_settings::run(mod_id, &mut *buttons);
+        horizon_physics_settings(mod_id, &mut *buttons);
         super::mod_appleskin_glue::on_settings(&mut *game, mod_id, &mut *buttons);
         super::freecam_hooks::settings(&mut *game, mod_id, &mut *buttons);
         if mod_id == super::punchy::ID {
             super::punchy::settings(&*game, &mut *buttons);
         }
+        super::punchy_moves::settings_page(&mut *game, mod_id, &mut *buttons);
         armorhud_page(&mut *game, mod_id, &mut *buttons);
         jade_settings(&mut *game, mod_id, &mut *buttons);
         basic_hud_page(&mut *game, mod_id, &mut *buttons);
@@ -323,11 +337,13 @@ pub(super) fn native_settings_click(game: &mut Game<'_>, mod_id: &str, button: u
         smartf3_click::run(&mut *game, mod_id, button);
         accurate_block_placement_click::run(&mut *game, mod_id, button);
         connected_textures_click::run(mod_id, button);
+        horizon_physics_settings_click(mod_id, button);
         super::mod_appleskin_glue::on_click(&mut *game, mod_id, button);
         super::freecam_hooks::click(&mut *game, mod_id, button);
         if mod_id == super::punchy::ID {
             super::punchy::click(&*game, button);
         }
+        super::punchy_moves::settings_click(&mut *game, mod_id, button);
         armorhud_click(&mut *game, mod_id, button);
         jade_settings_click(&mut *game, mod_id, button);
         basic_hud_click(&mut *game, mod_id, button);
@@ -425,9 +441,11 @@ pub(super) fn native_frame(game: &mut Game<'_>, elapsed: Duration) {
     let _ = (&game, &elapsed);
     #[cfg(target_os = "android")]
     {
+        super::punchy_moves::frame(&mut *game);
         recipes_frame::run(&mut *game);
         accurate_block_placement_frame::run(&mut *game);
         connected_textures_frame::run(&mut *game);
+        horizon_physics_setup_load(&mut *game);
         jade_frame(&mut *game);
         resourcify_frame(&mut *game);
         basic_hud_frame(&mut *game, elapsed);
@@ -561,6 +579,9 @@ pub(super) fn reset() {
     official_minimap::reset();
     accurate_block_placement::forget();
     horizon_client_render::native_connected_textures::reset();
+    horizon_client::native_horizon_physics::clear();
+    horizon_client::native_horizon_physics::menu_close();
+    horizon_client_render::native_horizon_physics_sway::set_physics_button_wanted(false);
     official_recipes::set_viewer(None);
     smartf3_native::reset();
     let _ = super::umbx_freecam::stop();

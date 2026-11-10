@@ -125,6 +125,12 @@ mod punchy;
 #[path = "../../../mods/official/punchy/mixins/punchy/geometry.rs"]
 mod punchy_geometry;
 #[cfg(target_os = "android")]
+#[path = "../../../mods/official/punchy-moves/mixins/punchy_moves/runtime.rs"]
+mod punchy_moves;
+#[cfg(target_os = "android")]
+#[path = "../../../mods/official/punchy-moves/mixins/punchy_moves/trails.rs"]
+mod punchy_moves_trails;
+#[cfg(target_os = "android")]
 #[path = "../../../mods/official/armorhud/mixins/armorhud/runtime.rs"]
 mod armorhud;
 #[cfg(target_os = "android")]
@@ -3654,6 +3660,9 @@ impl Game<'_> {
     }
     /// ClientLevel.addDestroyBlockEffect: a burst per outline box.
     fn destroy_particles(&mut self, pos: [i32; 3], state: BlockStateId) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_destroy(self, pos, state) { return; }
+
         let Some((sprite, tint)) = self.particle_sprite(state, pos) else {
             return;
         };
@@ -3665,6 +3674,9 @@ impl Game<'_> {
     }
     /// ClientLevel.addBreakingParticles: one crumb on the face being mined.
     fn crack_particle(&mut self, pos: [i32; 3], face: [i32; 3], state: BlockStateId) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_crack(self, pos, face, state) { return; }
+
         let Some((sprite, tint)) = self.particle_sprite(state, pos) else {
             return;
         };
@@ -5514,6 +5526,9 @@ impl Game<'_> {
         self.stats.add("used", &stack.item, 1);
     }
     fn break_block(&mut self, pos: [i32; 3]) -> Result<()> {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(result) = horizon_physics_collapse(self, pos) { return result; }
+
         self.lan_break_pos = Some(pos);
         let broken = self.with_player_actor(|game| game.break_block_as_player(pos));
         self.lan_break_pos = None;
@@ -10668,6 +10683,14 @@ impl Game<'_> {
         self.test_instance_marker_geometry(camera, &mut out, &mut see_through);
         self.debug_renderer_geometry(camera, &mut out);
         self.text_display_geometry(camera, alpha, &mut out, &mut see_through);
+        #[cfg(target_os = "android")]
+        {
+            let trail_start = out.len();
+            punchy_moves::world(self, camera, alpha, &mut out);
+            if out.len() > trail_start {
+                self.mark_translucent_entity(trail_start, "minecraft:player");
+            }
+        }
         self.see_through_vertices = see_through;
         // Entity shadows (EntityRenderer.extractShadow).
         self.mark_translucent_entity(out.len(), "minecraft:entity_shadow");
@@ -11282,6 +11305,9 @@ impl Game<'_> {
     }
     /// Player.attack with the attack-strength charge, crits and knockback.
     fn attack(&mut self) -> bool {
+        #[cfg(target_os = "android")]
+        horizon_physics_attack(self);
+
         if self.spectator() {
             return false;
         }
@@ -22366,3 +22392,12 @@ fn write_level_for_role(
 pub(crate) fn android_reset_bundled_mods() {
     android_bundled::reset();
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/attack.rs");
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/collapse.rs");
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/crack.rs");
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/destroy.rs");

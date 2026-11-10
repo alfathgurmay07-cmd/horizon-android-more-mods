@@ -3127,6 +3127,9 @@ impl OptionsUi {
     }
     /// Build every widget of the current page.
     fn layout(&mut self, s: &Settings, w: f32, h: f32) -> (Vec<Widget>, f32, f32, f32) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(layout) = horizon_physics_options_layout(self, s, w, h) { return layout; }
+
         let mut out = Vec::new();
         let mut rows = ListRows::default();
         let page = self.page();
@@ -7970,3 +7973,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../mods/official/horizon-physics/mixins/horizon_physics/options_layout.rs");

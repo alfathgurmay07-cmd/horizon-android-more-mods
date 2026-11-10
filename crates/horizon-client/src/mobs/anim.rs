@@ -663,7 +663,11 @@ pub fn setup(
     p: &mut Poses,
     w_anims: &HashMap<String, super::keyframes::Animation>,
 ) {
+    #[cfg(target_os = "android")]
+    super::punchy_moves::pose_start(m, s);
     if super::body_anim::anim(m, s, p, w_anims) {
+        #[cfg(target_os = "android")]
+        super::punchy_moves::pose(p);
         return;
     }
     match m.kind.anim {
@@ -953,6 +957,8 @@ pub fn setup(
             }
         }
     }
+    #[cfg(target_os = "android")]
+    super::punchy_moves::pose(p);
 }
 
 /// `PlayerModel.setupAnim`'s visibility: a spectator shows only its head (`showBody`), and the

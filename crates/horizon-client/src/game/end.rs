@@ -1159,6 +1159,9 @@ impl Game<'_> {
     /// eyes of ender, as camera-relative entity geometry (End portals and
     /// gateways are block entities).
     pub(super) fn end_geometry(&self, camera: glam::DVec3, out: &mut Vec<Vertex>) {
+        #[cfg(target_os = "android")]
+        horizon_physics_world(self, camera, out);
+
         self.end_crystal_geometry(camera, out);
         self.eye_geometry(camera, out);
     }
@@ -1857,3 +1860,6 @@ mod tests {
         assert!((centre - at).abs_diff_eq(up_dir * 0.125, 1e-5), "{centre}");
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/world.rs");

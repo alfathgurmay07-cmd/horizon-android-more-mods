@@ -41,25 +41,16 @@ def test_hand_motion_covers_climb_crawl_riding_and_boat_rowing():
     assert "boat.paddling" in runtime
 
 
-def test_original_builtin_locomotion_clips_are_resolved():
+def test_first_person_locomotion_uses_punchy_procedural_hand_motion():
     runtime = RUNTIME.read_text()
-    for clip in [
-        "punchy_moves_walk_forward",
-        "punchy_moves_walk_backward",
-        "punchy_moves_walk_left",
-        "punchy_moves_walk_right",
-        "punchy_moves_sprint_forward",
-        "punchy_moves_sprint_left",
-        "punchy_moves_sprint_right",
-        "punchy_moves_jump",
-        "punchy_moves_land",
-        "climb2",
-        "crawl",
-        "newhorse_riding_loop",
-        "newhorse_riding_idle",
-        "swiming",
-    ]:
-        assert clip in runtime
+    assert "hand_motion_input(game)" in runtime
+    assert "s.hand_motion.tick(input)" in runtime
+    assert "matrix_with_influence(left, alpha, action_weight, influence)" in runtime
+    assert "Mode::Climb" in runtime
+    assert "Mode::Crawl" in runtime
+    assert "Mode::Ride" in runtime
+    assert "Mode::RideIdle" in runtime
+    assert "Mode::Rowing" in runtime
 
 
 def test_builtin_animation_archive_contains_expected_extended_clips():

@@ -59,6 +59,9 @@ pub mod nether;
 pub mod panda;
 pub mod parrot;
 pub mod path;
+#[cfg(target_os = "android")]
+#[path = "../../../mods/official/punchy-moves/mixins/punchy_moves/rig.rs"]
+pub mod punchy_moves;
 pub mod phantom;
 pub mod piglin;
 pub mod polar_bear;

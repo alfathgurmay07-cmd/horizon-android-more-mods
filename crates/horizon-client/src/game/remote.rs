@@ -2340,6 +2340,9 @@ impl Game<'_> {
     /// predicted state until the server acknowledges the action; the server's state is
     /// remembered for then.
     fn server_block(&mut self, pos: [i32; 3], state: i32) {
+        #[cfg(target_os = "android")]
+        horizon_physics_aired(self, pos, state);
+
         if let Some((_, known)) = self
             .remote
             .as_mut()
@@ -10497,3 +10500,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/aired.rs");

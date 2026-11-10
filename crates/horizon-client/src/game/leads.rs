@@ -427,6 +427,9 @@ impl Game<'_> {
     }
     /// `LeashFeatureRenderer` for every lead and `LeashKnotRenderer` for the knots.
     pub(super) fn leash_geometry(&self, camera: glam::DVec3, alpha: f64, out: &mut Vec<Vertex>) {
+        #[cfg(target_os = "android")]
+        if let ::core::ops::ControlFlow::Break(()) = horizon_physics_leads(self, camera, alpha, out) { return; }
+
         let atlas = &self.gui.atlas;
         let white = atlas.font.white();
         let uv = [
@@ -677,3 +680,6 @@ mod rope_hold_tests {
         assert!((y - 90.0_f64.to_radians()).abs() < 1e-6);
     }
 }
+
+#[cfg(target_os = "android")]
+include!("../../../../mods/official/horizon-physics/mixins/horizon_physics/leads.rs");
