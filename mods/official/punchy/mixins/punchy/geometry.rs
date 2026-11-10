@@ -210,35 +210,7 @@ pub(super) fn render(game: &mut crate::game::Game<'_>, alpha: f64) -> Vec<Vertex
             owner.using_this_item = false;
             owner.use_item_remaining_ticks = 0;
         }
-        let mut state = game.resolve_item(&stack, context, Some(&owner), seed);
-        if crate::game::punchy::authored(left)
-            && !using
-            && stack.item.as_ref() != "minecraft:trident"
-            && stack.item.as_ref() != "minecraft:spear"
-        {
-            let kind = punchy_engine::tuning::vanilla_kind(&stack.item);
-            let is_food = game.items().get(&stack.item).is_some_and(|info| info.food.is_some());
-            let is_block = game.items().get(&stack.item).is_some_and(|info| info.block.is_some());
-            if !is_food && (is_block || kind != "INGREDIENT") {
-                let first_context = if left {
-                    horizon_assets::item_model::DisplayContext::FirstPersonLeftHand
-                } else {
-                    horizon_assets::item_model::DisplayContext::FirstPersonRightHand
-                };
-                let first_state = game.resolve_item(&stack, first_context, Some(&owner), seed);
-                let up = |rendered: &horizon_client::item_render::ItemRenderState| {
-                    rendered.layers.first().map(|layer| {
-                        let vector = layer.matrix.transform_vector3(glam::Vec3::Y);
-                        if vector.length_squared() > 1e-8 { vector.normalize() } else { glam::Vec3::Y }
-                    })
-                };
-                if let (Some(third_up), Some(first_up)) = (up(&state), up(&first_state)) {
-                    if third_up.dot(first_up) < 0.6 {
-                        state = first_state;
-                    }
-                }
-            }
-        }
+        let state = game.resolve_item(&stack, context, Some(&owner), seed);
         let light = game.world.light(
             eye[0].floor() as i32,
             eye[1].floor() as i32,

@@ -1,36 +1,48 @@
-HORIZON PUNCHY HAND PHYSICS PARITY DELTA — BUILD FIX 5
-Base: horizon-android-more-mods-android (7).zip
-Scope: cumulative changed/added files only, compared with the uploaded base archive.
+HORIZON PUNCHY CUMULATIVE DELTA
+Base: horizon-android-more-mods-android (6).zip
+Scope: only files added or modified relative to the original source archive.
+Modified files: 20
+Added files: 5
+Removed files: 0
 
-BUILD FIX 5 — ROOT CAUSE, NOT A ONE-LINE WORKAROUND
-The latest Actions compile showed that the item-ID borrow was already owned, but the active-animation tuple still retained a reference to the clip inside State.active. That reference remained live while the renderer mutated pendulum state, producing E0502.
+HAND MOTION SYSTEM REWRITE
+Adds a separate two-hand motion engine for procedural idle breathing/jitter, spring-based hand inertia, look lag, walk/sprint cycles, jump/fall/land, flight, swimming, climbing, crawling, horse riding, and boat rowing.
+Uses actual PlayerMotion inputs and per-hand first-person transforms. Keyframe clips are layered when available; procedural physics fills missing built-in clips. Punchy action clips retain arm ownership and vanilla swing is not suppressed by locomotion alone.
+Built-in locomotion clip routing includes jump/land/sprint, climb/climb2, crawl, swimming, and horse riding clips where present in the built-in archive. Boat rowing uses procedural motion because the built-in archive has no dedicated rowing animation.
 
-The per-hand render setup now resolves all animation-dependent inputs inside one bounded match on State.active and returns only owned values: action ownership, blend weight, tuning/pendulum flags, and the sampled AttachmentFrame. The active Playback/Clip borrow ends before any pendulum state or kick mutation. The obsolete borrowed animation tuple and interpolated expression value (which had no consumers) are removed. Existing timing, ownership, effect activation, blend and frame-sampling semantics are preserved.
-
-The physics-profile array remains explicitly typed as [PhysicsProfile; 2]. Per-hand item IDs remain cloned before state mutation. The regression suite now checks that active animation data is reduced to owned values before pendulum writes.
-
-VALIDATION
-- Four directly affected Punchy test files: 42 passed.
-- Focused Punchy hand-motion regression file: 19 passed.
-- All test_punchy_*.py files: 61 passed, 3 failed. The remaining three failures are pre-existing Android integration/catalog static assertions; those same three also fail on the uploaded base archive. The fourth stale assertion from the base suite and two stale editor-call assertions were updated to match the current implementation.
-- No local Rust/Cargo toolchain is installed in this environment, so this patch has not been independently compiled here. GitHub Actions is still required to confirm the Android build. No build success is claimed.
-
-MODIFIED FILES (12)
+MODIFIED FILES
 CHANGED-FILES-MANIFEST.txt
+crates/horizon-client-render/src/mod_list.rs
+crates/horizon-client-render/src/options_ui.rs
+crates/horizon-client-render/src/packs.rs
+crates/horizon-client-render/src/packs/cache.rs
+crates/horizon-client/src/game.rs
+crates/horizon-client/src/game/android_bundled.rs
+crates/horizon-client/src/game/native_hooks.rs
+crates/horizon-client/src/game/options.rs
+crates/horizon-client/src/game/packs.rs
+crates/horizon-client/src/game/startup_menu.rs
+mods/official/punchy/README.md
 mods/official/punchy/mixins/punchy/README.md
 mods/official/punchy/mixins/punchy/engine/attachments.rs
 mods/official/punchy/mixins/punchy/engine/engine.rs
+mods/official/punchy/mixins/punchy/engine/horizon_pose.rs
 mods/official/punchy/mixins/punchy/engine/resources.rs
-mods/official/punchy/mixins/punchy/engine/tuning.rs
-mods/official/punchy/mixins/punchy/geometry.rs
 mods/official/punchy/mixins/punchy/runtime.rs
-tests/test_punchy_android_interaction_wiring.py
-tests/test_punchy_hand_editor_parity.py
-tests/test_punchy_hand_motion_rewrite.py
+packaging/android/res/drawable-nodpi/launcher_icon.png
 tests/test_punchy_resourcepack_hand_editor.py
 
-ADDED FILES (1)
-mods/official/punchy/mixins/punchy/engine/pendulum.rs
+ADDED FILES
+mods/official/punchy/mixins/punchy/engine/data/punchy_builtin.zip
+mods/official/punchy/mixins/punchy/engine/hand_motion.rs
+tests/test_punchy_hand_editor_ui_icon.py
+tests/test_punchy_hand_motion_rewrite.py
+tests/test_punchy_resourcepack_inspect_regressions.py
 
-REMOVED FILES (0)
+REMOVED FILES
 (none)
+
+VALIDATION
+8 new focused static wiring tests passed.
+Combined focused Python suite: 49 passed, 4 deselected. The 4 deselected checks were verified to fail identically against the original baseline archive because they expect stale names/formatting.
+Rust unit tests and Android APK build were not run because cargo, rustc, and rustfmt are unavailable in this environment.

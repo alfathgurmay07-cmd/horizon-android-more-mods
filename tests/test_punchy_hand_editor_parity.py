@@ -52,8 +52,8 @@ class PunchyHandEditorParityTests(unittest.TestCase):
 
     def test_editor_changes_apply_to_rendered_item_and_arm(self):
         source = RUNTIME.read_text()
-        self.assertIn('editor_transform(&s, &id, left, "arm", &tags)', source)
-        self.assertIn('editor_transform(&s, &id, left, "item", &tags)', source)
+        self.assertIn('editor_transform(&s, id, left, "arm", &tags)', source)
+        self.assertIn('editor_transform(&s, id, left, "item", &tags)', source)
 
 
 if __name__ == "__main__":

@@ -1409,8 +1409,6 @@ pub mod horizon_pose;
 
 #[path = "hand_motion.rs"]
 pub mod hand_motion;
-#[path = "pendulum.rs"]
-pub mod pendulum;
 
 #[path = "skeleton.rs"]
 pub mod skeleton;

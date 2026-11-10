@@ -127,8 +127,8 @@ pub fn sample_frame(
     let animation = animation.filter(|_| owns_arm);
     let arm = skeleton.local(&format!("{side}_arm"), animation, weight);
     let grip_name = format!("itemgrip_{side}");
-    let pivot = skeleton.bones.get(&grip_name).map_or(Vec3::ZERO, |bone| bone.pivot);
-    let grip_position = Vec3::new(-pivot.x, pivot.z, pivot.y) / 16.0;
+    let base = skeleton.base(&grip_name).w_axis.truncate();
+    let grip_position = Vec3::new(-base.x, base.z, -base.y);
     let grip_local = skeleton.local(&grip_name, animation, weight);
     let grip_scale = joml_scale(grip_local);
     let v2 = animation.is_some_and(|(c, t, _)| c.effect_active("use_keyframes_v2", t));
@@ -170,34 +170,6 @@ pub fn attach(
     arm_rotation_factor: f32,
     legacy_item_rotation_order: bool,
 ) -> StandardPose {
-    attach_with_pendulum(
-        frame,
-        left,
-        arm_tuning,
-        item_tuning,
-        tuning_factor,
-        arm_rotation_factor,
-        legacy_item_rotation_order,
-        None,
-    )
-}
-
-pub fn attach_with_pendulum(
-    frame: AttachmentFrame,
-    left: bool,
-    arm_tuning: &Transform,
-    item_tuning: &Transform,
-    tuning_factor: f32,
-    arm_rotation_factor: f32,
-    legacy_item_rotation_order: bool,
-    mut pendulum: Option<(
-        &mut super::pendulum::State,
-        super::pendulum::Mode,
-        super::pendulum::Settings,
-        f32,
-        f32,
-    )>,
-) -> StandardPose {
     let AttachmentFrame {
         camera,
         body,
@@ -232,29 +204,19 @@ pub fn attach_with_pendulum(
         * Mat4::from_translation(-pivot)
         * Mat4::from_scale(grip_scale)
         * Mat4::from_scale(Vec3::splat(item_tuning.scale))
-        * Mat4::from_translation(tuning_pivot);
-    if let Some((state, mode, settings, influence, partial)) = pendulum.as_mut() {
-        if settings.hand_space != Some(false) {
-            item *= state.matrix(item, *mode, marker, *partial, *influence, *settings);
-        }
-    }
-    item *= Mat4::from_translation(marker);
+        * Mat4::from_translation(tuning_pivot)
+        * Mat4::from_translation(marker);
     let [x, y, z] = item_tuning.rotation.map(f32::to_radians);
     item *= if legacy_item_rotation_order {
         Mat4::from_rotation_z(z) * Mat4::from_rotation_x(x) * Mat4::from_rotation_y(y)
     } else {
         rotation_xyz(item_tuning.rotation)
     };
-    item *= Mat4::from_translation(-marker);
-    if let Some((state, mode, settings, influence, partial)) = pendulum.as_mut() {
-        if settings.hand_space == Some(false) {
-            item *= state.matrix(item, *mode, marker, *partial, *influence, *settings);
-        }
-    }
-    item *= Mat4::from_translation(
-        Vec3::from_array(item_tuning.offset)
-            + Vec3::new(if left { 0.04 } else { -0.04 }, -0.03, -0.02),
-    );
+    item *= Mat4::from_translation(-marker)
+        * Mat4::from_translation(
+            Vec3::from_array(item_tuning.offset)
+                + Vec3::new(if left { 0.04 } else { -0.04 }, -0.03, -0.02),
+        );
     StandardPose {
         arm: view_flip() * arm,
         item: view_flip() * item,
@@ -299,14 +261,6 @@ mod tests {
         assert!(r.item.is_finite() && l.item.is_finite());
         assert!((r.item.determinant() - 1.).abs() < 1e-5);
     }
-    #[test]
-    fn grip_position_uses_global_bedrock_pivot_and_source_axis_conversion() {
-        let bones = parse_bones(br#"{"minecraft:geometry":[{"bones":[{"name":"camera","pivot":[0,28,0]},{"name":"body","parent":"camera","pivot":[0,12,0]},{"name":"right_arm","parent":"body","pivot":[-11,16.6,-7]},{"name":"item_right","parent":"right_arm","pivot":[-11,8.5,-6]},{"name":"itemgrip_right","parent":"item_right","pivot":[-12,8.5,-6]}]}]}"#).unwrap();
-        let skeleton = Skeleton::new(&bones).unwrap();
-        let frame = sample_frame(&skeleton, false, None, 1.0, true);
-        assert_eq!(frame.grip_position, Vec3::new(12.0, -6.0, 8.5) / 16.0);
-    }
-
     #[test]
     fn pickaxe_inspect_moves_the_item_through_the_matching_hand_grip() {
         let resources = crate::resources::embedded().unwrap();
@@ -363,29 +317,6 @@ mod tests {
         assert!(shared.item.abs_diff_eq(expected.item, 1e-6));
         assert!(!shared.arm.abs_diff_eq(idle.arm, 1e-6));
     }
-
-    #[test]
-    fn tuning_pivot_remains_the_item_rotation_origin() {
-        let frame = AttachmentFrame {
-            camera: Mat4::IDENTITY,
-            body: Mat4::IDENTITY,
-            arm: Mat4::IDENTITY,
-            grip_position: Vec3::ZERO,
-            grip_rotation: Mat4::IDENTITY,
-            grip_delta: Vec3::ZERO,
-            grip_scale: Vec3::ONE,
-        };
-        let base = Transform::default();
-        let pivot = Transform {
-            pivot: [0.2, -0.1, 0.3],
-            ..Default::default()
-        };
-        let plain = attach(frame, false, &base, &base, 1.0, 1.0, false);
-        let tuned = attach(frame, false, &base, &pivot, 1.0, 1.0, false);
-        let expected = plain.item * Mat4::from_translation(Vec3::from_array(pivot.pivot));
-        assert!(tuned.item.abs_diff_eq(expected, 1e-5));
-    }
-
     #[test]
     fn zero_tuning_weight_removes_arm_override_without_removing_item_tuning() {
         let bones=crate::resources::parse_bones(br#"{"minecraft:geometry":[{"bones":[{"name":"camera"},{"name":"body","parent":"camera"},{"name":"right_arm","parent":"body"},{"name":"itemgrip_right","parent":"right_arm"}]}]}"#).unwrap();

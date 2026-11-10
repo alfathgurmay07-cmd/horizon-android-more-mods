@@ -18,7 +18,6 @@ pub struct Bone {
     pub parent: Option<String>,
     pub position: Vec3,
     pub rotation: Vec3,
-    pub pivot: Vec3,
 }
 impl Bone {
     /// SimpleBedrockGeo's ModelPart base transform, in model pixels.
@@ -457,7 +456,6 @@ pub fn parse_bones(bytes: &[u8]) -> Result<BTreeMap<String, Bone>, String> {
                 parent: parent.map(str::to_owned),
                 position,
                 rotation: vec3(b.get("rotation"))?,
-                pivot,
             },
         );
     }
@@ -562,7 +560,6 @@ mod tests {
         let b=parse_bones(br#"{"minecraft:geometry":[{"bones":[{"name":"camera","pivot":[0,28,0]},{"name":"body","parent":"camera","pivot":[0,12,0]},{"name":"right_arm","parent":"body","pivot":[-11,16.6,-7]}]}]}"#).unwrap();
         assert_eq!(b["body"].position, Vec3::new(0., 16., 0.));
         assert!((b["right_arm"].position - Vec3::new(-11., -4.6, -7.)).length() < 0.0001);
-        assert_eq!(b["right_arm"].pivot, Vec3::new(-11., 16.6, -7.));
         assert!(
             parse_bones(br#"{"minecraft:geometry":[{"bones":[{"name":"a","parent":"a"}]}]}"#)
                 .is_err()
