@@ -1,48 +1,36 @@
 HORIZON PUNCHY CUMULATIVE DELTA
-Base: horizon-android-more-mods-android (6).zip
-Scope: only files added or modified relative to the original source archive.
-Modified files: 20
-Added files: 5
+Base: horizon-android-more-mods-android (7).zip
+Scope: all Punchy source changes in this package, relative to the uploaded base archive.
+Modified files: 9
+Added files: 1
 Removed files: 0
 
-HAND MOTION SYSTEM REWRITE
-Adds a separate two-hand motion engine for procedural idle breathing/jitter, spring-based hand inertia, look lag, walk/sprint cycles, jump/fall/land, flight, swimming, climbing, crawling, horse riding, and boat rowing.
-Uses actual PlayerMotion inputs and per-hand first-person transforms. Keyframe clips are layered when available; procedural physics fills missing built-in clips. Punchy action clips retain arm ownership and vanilla swing is not suppressed by locomotion alone.
-Built-in locomotion clip routing includes jump/land/sprint, climb/climb2, crawl, swimming, and horse riding clips where present in the built-in archive. Boat rowing uses procedural motion because the built-in archive has no dedicated rowing animation.
+HAND POSE AND ITEM TRANSFORM PARITY
+Retains the two-hand procedural idle and locomotion layers, action clip ownership, item grip-pivot conversion, editor/tuning transform flow, and attachment ordering already present in this working source.
+The attachment path applies Pendulum tuning in the configured handSpace before or after item pre-transform, matching Punchy's renderer. Grip pivots are converted from Bedrock global bone pivots into item coordinates.
+
+PENDULUM INPUT AND ACTION FEEDBACK
+Movement sway now uses processed strafe/forward input (strafe * 1.5, -forward * 1.6), smoothed with Punchy's 1 - 0.7^(dt * 20) factor. Boat passengers suppress movement offsets, while walk-animation bob remains sourced from the player model for other passenger states.
+Action playback now triggers the per-hand spring (stiffness 60, damping 15.5), with the original action impulse and kick. Pending kicks are preserved through initial state initialization and consumed only during a subsequent physics update. Clip effects for use_keyframes_v2, disable_pendulum, and disable_pendulum_physics follow the original distinction between disabling action feedback and fading pendulum influence.
 
 MODIFIED FILES
 CHANGED-FILES-MANIFEST.txt
-crates/horizon-client-render/src/mod_list.rs
-crates/horizon-client-render/src/options_ui.rs
-crates/horizon-client-render/src/packs.rs
-crates/horizon-client-render/src/packs/cache.rs
-crates/horizon-client/src/game.rs
-crates/horizon-client/src/game/android_bundled.rs
-crates/horizon-client/src/game/native_hooks.rs
-crates/horizon-client/src/game/options.rs
-crates/horizon-client/src/game/packs.rs
-crates/horizon-client/src/game/startup_menu.rs
-mods/official/punchy/README.md
 mods/official/punchy/mixins/punchy/README.md
 mods/official/punchy/mixins/punchy/engine/attachments.rs
 mods/official/punchy/mixins/punchy/engine/engine.rs
-mods/official/punchy/mixins/punchy/engine/horizon_pose.rs
 mods/official/punchy/mixins/punchy/engine/resources.rs
+mods/official/punchy/mixins/punchy/engine/tuning.rs
+mods/official/punchy/mixins/punchy/geometry.rs
 mods/official/punchy/mixins/punchy/runtime.rs
-packaging/android/res/drawable-nodpi/launcher_icon.png
-tests/test_punchy_resourcepack_hand_editor.py
+tests/test_punchy_hand_motion_rewrite.py
 
 ADDED FILES
-mods/official/punchy/mixins/punchy/engine/data/punchy_builtin.zip
-mods/official/punchy/mixins/punchy/engine/hand_motion.rs
-tests/test_punchy_hand_editor_ui_icon.py
-tests/test_punchy_hand_motion_rewrite.py
-tests/test_punchy_resourcepack_inspect_regressions.py
+mods/official/punchy/mixins/punchy/engine/pendulum.rs
 
 REMOVED FILES
 (none)
 
 VALIDATION
-8 new focused static wiring tests passed.
-Combined focused Python suite: 49 passed, 4 deselected. The 4 deselected checks were verified to fail identically against the original baseline archive because they expect stale names/formatting.
+Focused Punchy regression suite: 56 passed, 4 deselected.
+The four deselected baseline checks retain stale static expectations for older hard-coded transform calls and unrelated hook/load names. Running them unchanged produces the same baseline mismatch; they are not counted as passing.
 Rust unit tests and Android APK build were not run because cargo, rustc, and rustfmt are unavailable in this environment.

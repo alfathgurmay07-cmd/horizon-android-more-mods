@@ -3,7 +3,7 @@ use super::*;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 use punchy_engine::player::Playback;
 use punchy_engine::{Clip, Pose, actions as action, phases, resources};
-use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, fs, path::Path, sync::Arc};
+use std::{cell::RefCell, collections::{BTreeMap, VecDeque}, fs, path::Path, sync::Arc, time::Instant};
 
 pub(super) const ID: &str = "punchy";
 pub(super) const TITLE: &str = "Punchy";
@@ -36,6 +36,14 @@ struct State {
     consume_hand: action::Hand,
     active: Option<Playback>,
     hand_motion: punchy_engine::hand_motion::HandMotion,
+    pendulum_states: [punchy_engine::pendulum::State; 2],
+    pendulum_items: [String; 2],
+    pendulum_last_frame: Option<Instant>,
+    pendulum_camera: Option<(f32, f32)>,
+    pendulum_offsets: [f32; 2],
+    pendulum_action_values: [f32; 2],
+    pendulum_action_velocities: [f32; 2],
+    pendulum_action_kicks: [f32; 2],
     idle_layers: [IdleLayer; 2],
     motion_blocked: bool,
     previous_swings: u32,
@@ -486,6 +494,10 @@ pub(super) fn resources_reloaded() {
         state.tuning = None;
         state.active = None;
         state.hand_motion = Default::default();
+        state.pendulum_states = Default::default();
+        state.pendulum_items = Default::default();
+        state.pendulum_last_frame = None;
+        state.pendulum_camera = None;
         state.idle_layers = Default::default();
         state.motion_blocked = false;
         state.machine = Default::default();
@@ -692,6 +704,14 @@ pub(super) fn tick(game: &mut Game<'_>) {
             let mut s = s.borrow_mut();
             s.active = None;
             s.hand_motion = Default::default();
+            s.pendulum_states = Default::default();
+            s.pendulum_items = Default::default();
+            s.pendulum_last_frame = None;
+            s.pendulum_camera = None;
+            s.pendulum_offsets = [0.0; 2];
+            s.pendulum_action_values = [0.0; 2];
+            s.pendulum_action_velocities = [0.0; 2];
+            s.pendulum_action_kicks = [0.0; 2];
             s.idle_layers = Default::default();
             s.motion_blocked = false;
             s.machine = Default::default();
@@ -720,6 +740,7 @@ pub(super) fn tick(game: &mut Game<'_>) {
         if s.source.is_none() {return;}
         s.main_left=game.settings.main_hand_left;
         s.offhand_item=items[1].is_some();
+        tick_pendulum_feedback(&mut s, game);
         if let Some(player) = game.player.as_ref() {
             let velocity = player.velocity;
             s.hand_motion.tick(punchy_engine::hand_motion::Input {
@@ -849,10 +870,12 @@ pub(super) fn tick(game: &mut Game<'_>) {
                         s.status=format!("Playing {}",clip.name);
                         s.playback_id=s.playback_id.wrapping_add(1);
                         let from=s.active.take().map(Box::new);
-                        s.active=Some(Playback{from,out_weight:1.,previous_out_weight:1.,id:s.playback_id,expression:p.start_time,previous_expression:p.start_time,return_fade:0.28,skip_tick:false,clip,hand:p.hand,previous:p.start_time,time:p.start_time,
+                        let play_hand = p.hand;
+                        s.active=Some(Playback{from,out_weight:1.,previous_out_weight:1.,id:s.playback_id,expression:p.start_time,previous_expression:p.start_time,return_fade:0.28,skip_tick:false,clip,hand:play_hand,previous:p.start_time,time:p.start_time,
                             multiplier:p.speed_multiplier,looping:p.looping,released:false,hold:p.hold_on_last_frame,
                             fade:p.blend_seconds.unwrap_or(0.2).max(0.001),stopping:false,
                             weight:if p.skip_blend_in {1.0}else{0.0},previous_weight:if p.skip_blend_in {1.}else{0.}});
+                        trigger_pendulum_action(&mut s, play_hand);
                     }
                 }
                 action::Operation::Stop{hand,mode} => {
@@ -1426,6 +1449,75 @@ pub(super) fn arms(game: &mut Game<'_>, alpha: f64, out: &mut Vec<Vertex>) {
     });
 }
 
+fn pendulum_frame_input(state: &mut State, game: &Game<'_>, _alpha: f32) -> punchy_engine::pendulum::Input {
+    let now = Instant::now();
+    let dt = state.pendulum_last_frame.replace(now)
+        .map_or(1.0 / 60.0, |previous| now.duration_since(previous).as_secs_f32())
+        .clamp(0.001, 1.0 / 30.0);
+    let yaw = game.yaw;
+    let pitch = game.pitch;
+    let (yaw_delta, pitch_delta) = state.pendulum_camera.map_or((0.0, 0.0), |(last_yaw, last_pitch)| {
+        (((yaw - last_yaw + 180.0).rem_euclid(360.0) - 180.0), pitch - last_pitch)
+    });
+    state.pendulum_camera = Some((yaw, pitch));
+    let Some(player) = game.player.as_ref() else {
+        return punchy_engine::pendulum::Input { dt, yaw, yaw_delta, pitch, pitch_delta, ..Default::default() };
+    };
+    let velocity = player.velocity;
+    let (walk_speed, walk_pos) = game.player_model.as_ref().map_or((0.0, 0.0), |model| {
+        (model.limb_speed, model.limb_position)
+    });
+    punchy_engine::pendulum::Input {
+        dt,
+        yaw,
+        yaw_delta,
+        pitch,
+        pitch_delta,
+        walk_speed,
+        walk_pos,
+        vel_y: velocity.y as f32,
+        on_ground: player.ground.on_ground,
+        offset_x: state.pendulum_offsets[0],
+        offset_z: state.pendulum_offsets[1],
+        ..Default::default()
+    }
+}
+
+fn trigger_pendulum_action(state: &mut State, hand: action::Hand) {
+    let left = state.main_left != (hand == action::Hand::Off);
+    let index = usize::from(left);
+    state.pendulum_action_velocities[index] += 10.0;
+    state.pendulum_action_kicks[index] += 1.0;
+}
+
+fn tick_pendulum_feedback(state: &mut State, game: &Game<'_>) {
+    let dt = 0.05_f32;
+    let boat_passenger = game.riding.is_some_and(|id| game.boats.iter().any(|boat| boat.id == id));
+    let (target_x, target_z) = game.player.as_ref().map_or((0.0, 0.0), |player| {
+        if boat_passenger {
+            (0.0, 0.0)
+        } else {
+            (player.applied_input[0].clamp(-1.0, 1.0) * 1.5,
+             -player.applied_input[1].clamp(-1.0, 1.0) * 1.6)
+        }
+    });
+    let blend = 1.0 - 0.7_f32.powf(dt * 20.0);
+    state.pendulum_offsets[0] += (target_x - state.pendulum_offsets[0]) * blend;
+    state.pendulum_offsets[1] += (target_z - state.pendulum_offsets[1]) * blend;
+    for index in 0..2 {
+        let acceleration = -60.0 * state.pendulum_action_values[index]
+            - 15.5 * state.pendulum_action_velocities[index];
+        state.pendulum_action_velocities[index] += acceleration * dt;
+        state.pendulum_action_values[index] += state.pendulum_action_velocities[index] * dt;
+        if state.pendulum_action_values[index].abs() < 0.0001
+            && state.pendulum_action_velocities[index].abs() < 0.0001
+        {
+            state.pendulum_action_values[index] = 0.0;
+            state.pendulum_action_velocities[index] = 0.0;
+        }
+    }
+}
+
 pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
     STATE.with(|cell| {
         let mut s = cell.borrow_mut();
@@ -1449,6 +1541,8 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
             [false, false]
         };
         let mut authored = [None, None];
+        let render_alpha = s.render_alpha;
+        let mut pendulum_input = pendulum_frame_input(&mut s, game, render_alpha);
         if s.enabled && game.native_setting(ID, "hand_poses").as_deref() != Some("horizon") {
             if let (Some(source), Some(tuning)) = (&s.source, &s.tuning) {
                 if let Ok(skeleton) = punchy_engine::skeleton::Skeleton::new(&source.bones)
@@ -1489,7 +1583,32 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                         let frame=s.active.as_ref().map_or_else(
                             ||punchy_engine::attachments::sample_frame(&skeleton,left,None,1.,true),
                             |p|p.frame(&skeleton,left,s.main_left,s.offhand_item,s.render_alpha));
-                        let mut pose = punchy_engine::attachments::attach(
+                        let physics = tuning.physics_for(&context, left);
+                        let item_id = id.clone();
+                        if s.pendulum_items[i] != item_id {
+                            s.pendulum_states[i].reset();
+                            s.pendulum_items[i] = item_id;
+                        }
+                        let pendulum_disabled = animation.is_some_and(|(clip, time, _)| {
+                            owns && (clip.effect_active("use_keyframes_v2", time)
+                                || clip.effect_active("disable_pendulum", time)
+                                || clip.effect_active("disable_pendulum_physics", time))
+                        });
+                        let pendulum_influence = if animation.is_some_and(|(clip, time, _)| {
+                            owns && (clip.effect_active("disable_pendulum", time)
+                                || clip.effect_active("disable_pendulum_physics", time))
+                        }) { 1.0 - weight } else { 1.0 };
+                        pendulum_input.action_value = s.pendulum_action_values[i];
+                        pendulum_input.action_kick = s.pendulum_action_kicks[i];
+                        if physics.mode == punchy_engine::pendulum::Mode::None {
+                            s.pendulum_states[i].reset();
+                        } else {
+                            let consumed = s.pendulum_states[i].update(pendulum_input, physics.settings, !pendulum_disabled);
+                            if consumed {
+                                s.pendulum_action_kicks[i] = 0.0;
+                            }
+                        }
+                        let mut pose = punchy_engine::attachments::attach_with_pendulum(
                             frame,
                             left,
                             &arm,
@@ -1499,6 +1618,13 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
                             id.ends_with(":chest")
                                 || id.ends_with(":piston")
                                 || id.ends_with(":sticky_piston"),
+                            (physics.mode != punchy_engine::pendulum::Mode::None).then_some((
+                                &mut s.pendulum_states[i],
+                                physics.mode,
+                                physics.settings,
+                                pendulum_influence,
+                                render_alpha,
+                            )),
                         );
                         let slim = game.player_model.as_ref().is_some_and(|p| p.slim);
                         if let Some(model) = game.res.player_arm(slim, left).as_ref() {
@@ -1853,13 +1979,14 @@ fn apply_phase(s: &mut State, consume: bool, request: &phases::Request, speed: f
         };
         s.playback_id = s.playback_id.wrapping_add(1);
         let from = s.active.take().map(Box::new);
+        let play_hand = action_hand(play.hand);
         s.active = Some(Playback {
             from,
             out_weight: 1.,
             previous_out_weight: 1.,
             id: s.playback_id,
             clip,
-            hand: action_hand(play.hand),
+            hand: play_hand,
             previous: play.start_time,
             time: play.start_time,
             expression: play.expression_time,
@@ -1875,6 +2002,7 @@ fn apply_phase(s: &mut State, consume: bool, request: &phases::Request, speed: f
             weight: if play.blend_seconds <= 0. { 1. } else { 0. },
             previous_weight: if play.blend_seconds <= 0. { 1. } else { 0. },
         });
+        trigger_pendulum_action(s, play_hand);
         let playback = phase_playback(s);
         if consume {
             s.consume.commit(request, &playback);

@@ -28,6 +28,13 @@ pub struct Transform {
     pub pivot: [f32; 3],
 }
 
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PhysicsProfile {
+    pub mode: super::pendulum::Mode,
+    pub settings: super::pendulum::Settings,
+}
+
 impl Default for Transform {
     fn default() -> Self {
         Self {
@@ -347,6 +354,54 @@ impl Tuning {
         Some(Transform::parse(&merged))
     }
 
+    pub fn physics_for(&self, item: &ItemContext<'_>, left: bool) -> PhysicsProfile {
+        let side = if left { "left" } else { "right" };
+        let specific = self.specific_entry(item);
+        let group = self.group_entry(item);
+        let base_transform = group.and_then(|entry| entry.get("transforms")).and_then(|entry| entry.get(side));
+        let override_transform = specific.and_then(|entry| entry.get("transforms")).and_then(|entry| entry.get(side));
+        let transform = match (base_transform, override_transform) {
+            (Some(base), Some(over)) => merge_objects(base, over),
+            (Some(base), None) => base.clone(),
+            (None, Some(over)) => over.clone(),
+            (None, None) => Value::Null,
+        };
+        let mode_name = text(transform.get("physics")).unwrap_or_default().to_uppercase();
+        let mode = match mode_name.as_str() {
+            "FULL_PENDULUM" => super::pendulum::Mode::FullPendulum,
+            "FORWARD_PENDULUM" => super::pendulum::Mode::ForwardPendulum,
+            _ => super::pendulum::Mode::None,
+        };
+        let specific_profile = physics_profile(specific, &mode_name);
+        let group_profile = physics_profile(group, &mode_name);
+        let number = |key: &str| -> Option<f32> {
+            specific_profile.and_then(|entry| entry.get(key)).and_then(Value::as_f64)
+                .or_else(|| group_profile.and_then(|entry| entry.get(key)).and_then(Value::as_f64))
+                .filter(|value| value.is_finite())
+                .map(|value| value as f32)
+        };
+        let boolean = |key: &str| -> Option<bool> {
+            specific_profile.and_then(|entry| entry.get(key)).and_then(Value::as_bool)
+                .or_else(|| group_profile.and_then(|entry| entry.get(key)).and_then(Value::as_bool))
+        };
+        PhysicsProfile {
+            mode,
+            settings: super::pendulum::Settings {
+                limit_deg: number("limitDeg"),
+                limit_deg_up: number("limitDegUp"),
+                limit_deg_down: number("limitDegDown"),
+                force: number("force"),
+                speed: number("speed"),
+                camera_sens: number("cameraSens"),
+                gravity: number("gravity"),
+                motion_sens: number("motionSens"),
+                invert: boolean("invert"),
+                hand_space: boolean("handSpace"),
+                enable_creature_physics: boolean("enableCreaturePhysics"),
+            },
+        }
+    }
+
     pub fn runtime_flag(&self, item: &ItemContext<'_>, key: &str) -> Option<bool> {
         self.specific_entry(item)
             .and_then(|v| v.get(key))
@@ -482,6 +537,19 @@ fn strings(value: Option<&Value>) -> Vec<String> {
         .map(|a| a.iter().filter_map(|v| text(Some(v))).collect())
         .unwrap_or_default()
 }
+fn physics_profile<'a>(entry: Option<&'a Value>, mode_name: &str) -> Option<&'a Value> {
+    let values = entry?.get("physics")?;
+    if let Some(list) = values.as_array() {
+        list.iter().find(|candidate| {
+            text(candidate.get("name")).is_some_and(|name| name.eq_ignore_ascii_case(mode_name))
+        })
+    } else if values.is_object() {
+        Some(values)
+    } else {
+        None
+    }
+}
+
 fn text(value: Option<&Value>) -> Option<String> {
     value
         .and_then(Value::as_str)
@@ -798,4 +866,30 @@ mod tests {
         );
         assert!(t.animation("example:fake_sword", "attack", false).is_none());
     }
+
+    #[test]
+    fn resolves_punchy_pendulum_mode_and_group_physics_settings() {
+        let document = serde_json::json!({
+            "item": {
+                "LANTERN": {
+                    "physics": [{"name":"FULL_PENDULUM","limitDeg":55.0,"force":0.1,"speed":1.0,"cameraSens":0.25,"gravity":25.0}],
+                    "transforms": {
+                        "right": {"physics":"FULL_PENDULUM"},
+                        "left": {"physics":"FORWARD_PENDULUM"}
+                    }
+                }
+            }
+        });
+        let tuning = Tuning::parse(&document).unwrap();
+        let item = ItemContext { id: "minecraft:lantern", kind: Some("LANTERN"), ..Default::default() };
+        let profile = tuning.physics_for(&item, false);
+        assert_eq!(profile.mode, super::super::pendulum::Mode::FullPendulum);
+        assert_eq!(profile.settings.force, Some(0.1));
+        assert_eq!(profile.settings.speed, Some(1.0));
+        assert_eq!(profile.settings.camera_sens, Some(0.25));
+        let left = tuning.physics_for(&item, true);
+        assert_eq!(left.mode, super::super::pendulum::Mode::ForwardPendulum);
+        assert_eq!(left.settings.force, None);
+    }
+
 }
