@@ -1545,17 +1545,18 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
         let mut pendulum_input = pendulum_frame_input(&mut s, game, render_alpha);
         if s.enabled && game.native_setting(ID, "hand_poses").as_deref() != Some("horizon") {
             let source_bones = s.source.as_ref().map(|source| source.bones.clone());
-            let physics_profiles = s.tuning.as_ref().map(|tuning| {
-                std::array::from_fn(|i| {
-                    let left = i != 0;
-                    let hand = usize::from(s.main_left != left);
-                    let context = punchy_engine::tuning::ItemContext {
-                        id: &s.last_items[hand],
-                        kind: s.item_kinds[hand].as_deref(),
-                        ..Default::default()
-                    };
-                    tuning.physics_for(&context, left)
-                })
+            let physics_profiles: Option<[punchy_engine::tuning::PhysicsProfile; 2]> =
+                s.tuning.as_ref().map(|tuning| {
+                    std::array::from_fn(|i| {
+                        let left = i != 0;
+                        let hand = usize::from(s.main_left != left);
+                        let context = punchy_engine::tuning::ItemContext {
+                            id: &s.last_items[hand],
+                            kind: s.item_kinds[hand].as_deref(),
+                            ..Default::default()
+                        };
+                        tuning.physics_for(&context, left)
+                    })
             });
             if let (Some(source_bones), Some(physics_profiles)) =
                 (source_bones.as_ref(), physics_profiles.as_ref())
