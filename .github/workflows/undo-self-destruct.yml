@@ -8,10 +8,6 @@ on:
         description: "Commit SHA to restore repository to"
         required: true
         type: string
-      confirm:
-        description: "Type RESTORE to confirm"
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -25,19 +21,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate Input
+      - name: Validate SHA
         shell: bash
         env:
           TARGET_SHA: ${{ inputs.target_sha }}
-          CONFIRM: ${{ inputs.confirm }}
         run: |
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
             echo "Invalid commit SHA"
-            exit 1
-          fi
-
-          if [[ "$CONFIRM" != "RESTORE" ]]; then
-            echo "Confirmation failed"
             exit 1
           fi
 
@@ -63,7 +53,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git rm -r --ignore-unmatch .
-
           git checkout "$TARGET_SHA" -- .
 
           if git diff --cached --quiet; then
