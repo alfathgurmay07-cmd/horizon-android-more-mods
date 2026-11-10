@@ -1,59 +1,78 @@
-name: Undo Self Destruct
+
+name: Revert Repository
 
 on:
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: 'Self-destruct commit SHA to revert'
+      target_sha:
+        description: "Commit SHA to restore repository to"
+        required: true
+        type: string
+      confirm:
+        description: "Type RESTORE to confirm"
         required: true
         type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: repository-restore-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   restore:
-    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Selected Branch
-        uses: actions/checkout@v7
+      - name: Validate Input
+        shell: bash
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            echo "Invalid commit SHA"
+            exit 1
+          fi
+
+          if [[ "$CONFIRM" != "RESTORE" ]]; then
+            echo "Confirmation failed"
+            exit 1
+          fi
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
           fetch-depth: 0
           token: ${{ secrets.REPO_TOKEN }}
 
-      - name: Validate Commit
+      - name: Validate Target Commit
+        shell: bash
         env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
+          TARGET_SHA: ${{ inputs.target_sha }}
         run: |
-          if ! git cat-file -e "${COMMIT_SHA}^{commit}"; then
-            echo "Invalid commit SHA."
-            exit 1
-          fi
+          git cat-file -e "$TARGET_SHA^{commit}"
 
-          if ! git merge-base --is-ancestor "$COMMIT_SHA" HEAD; then
-            echo "Commit is not in this branch history."
-            exit 1
-          fi
-
-          COMMIT_MESSAGE=$(git log -1 --format=%s "$COMMIT_SHA")
-
-          if [ "$COMMIT_MESSAGE" != "Self destruct: remove all files" ]; then
-            echo "The selected commit is not a self-destruct commit."
-            exit 1
-          fi
-
-      - name: Revert Self Destruct
+      - name: Restore Repository
+        shell: bash
         env:
-          COMMIT_SHA: ${{ inputs.commit_sha }}
+          TARGET_SHA: ${{ inputs.target_sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git revert -X ours --no-edit "$COMMIT_SHA"
+          git rm -r --ignore-unmatch .
 
-      - name: Push Restored Branch
+          git checkout "$TARGET_SHA" -- .
+
+          if git diff --cached --quiet; then
+            echo "Repository already matches target commit."
+            exit 0
+          fi
+
+          git commit -m "chore: restore repository to $TARGET_SHA"
+
+      - name: Push Restore Commit
         run: |
-          git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
