@@ -1032,7 +1032,7 @@ fn editor_fields(target: &str, scope: &str) -> Vec<EditorField> {
     position.into_iter().chain(rotation).chain([scale]).chain(pivot).collect()
 }
 
-pub(super) fn sliders(game: &Game<'_>, sliders: &mut Vec<crate::mod_list::NativeSlider>) {
+pub(super) fn sliders(game: &Game<'_>, sliders: &mut Vec<horizon_client_render::mod_list::NativeSlider>) {
     STATE.with(|cell| {
         let mut state = cell.borrow_mut();
         load(game, &mut state);
@@ -1053,7 +1053,7 @@ pub(super) fn sliders(game: &Game<'_>, sliders: &mut Vec<crate::mod_list::Native
         for field in editor_fields(&target, &scope) {
             let value = transform_component(&transform, field.key).clamp(field.minimum, field.maximum);
             let normalized = (value - field.minimum) / (field.maximum - field.minimum);
-            sliders.push(crate::mod_list::NativeSlider {
+            sliders.push(horizon_client_render::mod_list::NativeSlider {
                 section: field.section.into(),
                 label: format!("{}  {}", field.label, format!("{:.*}", field.precision, value)),
                 value: normalized.clamp(0.0, 1.0),

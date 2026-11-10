@@ -42,3 +42,12 @@ REMOVED FILES
 VALIDATION
 22 focused Python tests passed: resource-pack loading/priority, compatibility, Inspect Pickaxe, and Hand Editor parity.
 Rust compilation and Android APK build were not run because Rust toolchain is unavailable in the environment.
+
+CI COMPILE FIX (WORKFLOW RUN 42722480965)
+crates/horizon-client-render/src/options_ui.rs: moved NativeSlider event variant to Event and removed unused Act::NativeSlider variant. The native slider handler already exists in crates/horizon-client/src/game/options.rs; startup-menu event handling is also present. Android compilation also requires the NativeSlider type to be referenced through the direct dependency path horizon_client_render::mod_list::NativeSlider in android_bundled.rs and Punchy runtime.rs; crate::mod_list resolves against the Android crate root and is unavailable there.
+
+CURRENT REGRESSION CHECKS
+tests/test_punchy_resourcepack_hand_editor.py: 9 passed
+tests/test_punchy_hand_editor_ui_icon.py: 3 passed
+tests/test_punchy_resourcepack_inspect_regressions.py: 5 passed
+Total in this rerun: 17 passed. Rust/Android build not run locally because rustc/cargo are unavailable in the packaging environment.

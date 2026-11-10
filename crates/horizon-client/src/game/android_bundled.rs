@@ -297,7 +297,7 @@ pub(super) fn native_settings(game: &mut Game<'_>, mod_id: &str, buttons: &mut V
     }
 }
 
-pub(super) fn native_settings_sliders(game: &Game<'_>, mod_id: &str, sliders: &mut Vec<crate::mod_list::NativeSlider>) {
+pub(super) fn native_settings_sliders(game: &Game<'_>, mod_id: &str, sliders: &mut Vec<horizon_client_render::mod_list::NativeSlider>) {
     let _ = (&game, &mod_id, &sliders);
     #[cfg(target_os = "android")]
     if mod_id == super::punchy::ID {
