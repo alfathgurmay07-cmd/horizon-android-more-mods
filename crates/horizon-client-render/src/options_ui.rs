@@ -1480,6 +1480,7 @@ pub enum Page {
     Mods,
     /// A native mod's settings page: its index in `mods.installed`.
     NativeMod(usize),
+    PunchyHandEditor(usize),
     /// Horizon's shader packs, either kind (`shader_pack_list`).
     ShaderPacks,
     /// The options of `s.shader_packs[.0]`, a Horizon pack: its `[[pages]]` entry `.1`, the
@@ -2449,6 +2450,7 @@ impl OptionsUi {
             Page::Packs => "resourcePack.title",
             Page::Mods => "horizon.pages.mods",
             Page::NativeMod(_) => "Mod Settings",
+            Page::PunchyHandEditor(_) => "Hand Editor",
             Page::ShaderPacks => "horizon.pages.shader_packs",
             Page::ShaderOptions | Page::NativePackOptions(..) => "horizon.pages.shader_options",
             Page::Graphics | Page::GraphicsAdvanced | Page::GraphicsHdr | Page::HdrCalibration => {
@@ -2539,6 +2541,7 @@ impl OptionsUi {
             }
         }
         if m.id == "punchy" {
+            let editor_page = self.page() == Page::PunchyHandEditor(i);
             let native_button = |button_index: usize, width: f32| {
                 let label = match button_index {
                     28 => "Mirror",
@@ -2562,6 +2565,45 @@ impl OptionsUi {
                     Act::NativeButton(i, button_index),
                 )
             };
+            if !editor_page {
+                rows.push(Row::Header("PUNCHY"));
+                rows.push(Row::Buttons(native_button(0, 150.0), Some(native_button(2, 150.0))));
+                rows.push(Row::Buttons(native_button(1, 310.0), None));
+                rows.push(Row::Header("HAND EDITOR"));
+                rows.push(Row::Buttons(
+                    button(
+                        0.0,
+                        0.0,
+                        310.0,
+                        Text::literal("Open Hand Editor"),
+                        Act::Push(Page::PunchyHandEditor(i)),
+                    ),
+                    None,
+                ));
+                if !page.keys.is_empty() {
+                    rows.push(Row::Header("KEY BINDS"));
+                    for (k, [name, label, default]) in page.keys.iter().enumerate() {
+                        let key = chosen.and_then(|c| c.get(name)).unwrap_or(default);
+                        let mut message = keybinds::display_name(key);
+                        if self.selected_native_key == Some((i, k)) {
+                            message = Text::literal("> ")
+                                .append(message.with_color(text::WHITE))
+                                .append(" <")
+                                .with_color(text::YELLOW);
+                        }
+                        let caption = button(0.0, 0.0, 150.0, Text::literal(label.clone()), Act::None);
+                        let change = button(0.0, 0.0, 150.0, message, Act::NativeKey(i, k));
+                        rows.push(Row::Buttons(inactive(caption), Some(change)));
+                    }
+                }
+                if let Some(source) = page.buttons.get(39) {
+                    rows.push(Row::Note(source.clone()));
+                }
+                if let Some(status) = page.buttons.get(40) {
+                    rows.push(Row::Note(status.clone()));
+                }
+                return rows;
+            }
             rows.push(Row::Header("HAND EDITOR"));
             if let Some(item) = page.buttons.get(41) {
                 rows.push(Row::Note(item.clone()));
@@ -2574,7 +2616,7 @@ impl OptionsUi {
             let has_selector_chips = page.buttons.len() > 44;
             if has_selector_chips {
                 rows.push(Row::Header("SELECTOR"));
-                let mut chips = (44..page.buttons.len());
+                let mut chips = 44..page.buttons.len();
                 while let Some(first) = chips.next() {
                     let second = chips.next().map(|index| native_button(index, 150.0));
                     rows.push(Row::Buttons(native_button(first, 150.0), second));
@@ -2621,31 +2663,6 @@ impl OptionsUi {
             rows.push(Row::Buttons(native_button(31, 150.0), Some(native_button(32, 150.0))));
             rows.push(Row::Buttons(native_button(35, 150.0), Some(native_button(36, 150.0))));
             rows.push(Row::Buttons(native_button(38, 310.0), None));
-            rows.push(Row::Header("HORIZON SETTINGS"));
-            rows.push(Row::Buttons(native_button(0, 150.0), Some(native_button(2, 150.0))));
-            rows.push(Row::Buttons(native_button(1, 310.0), None));
-            if !page.keys.is_empty() {
-                rows.push(Row::Header("KEY BINDS"));
-                for (k, [name, label, default]) in page.keys.iter().enumerate() {
-                    let key = chosen.and_then(|c| c.get(name)).unwrap_or(default);
-                    let mut message = keybinds::display_name(key);
-                    if self.selected_native_key == Some((i, k)) {
-                        message = Text::literal("> ")
-                            .append(message.with_color(text::WHITE))
-                            .append(" <")
-                            .with_color(text::YELLOW);
-                    }
-                    let caption = button(0.0, 0.0, 150.0, Text::literal(label.clone()), Act::None);
-                    let change = button(0.0, 0.0, 150.0, message, Act::NativeKey(i, k));
-                    rows.push(Row::Buttons(inactive(caption), Some(change)));
-                }
-            }
-            if let Some(source) = page.buttons.get(39) {
-                rows.push(Row::Note(source.clone()));
-            }
-            if let Some(status) = page.buttons.get(40) {
-                rows.push(Row::Note(status.clone()));
-            }
             return rows;
         }
         for (b, label) in page.buttons.iter().enumerate() {
@@ -3066,7 +3083,7 @@ impl OptionsUi {
                     })
                     .collect()
             }
-            Page::NativeMod(i) => self.native_rows(s, i),
+            Page::NativeMod(i) | Page::PunchyHandEditor(i) => self.native_rows(s, i),
             Page::ShaderPacks => {
                 if s.shader_packs.is_empty() {
                     return vec![Row::Header("horizon.shader_packs.empty")];
@@ -3708,6 +3725,14 @@ impl OptionsUi {
                 if let Some((label, act)) = folder {
                     out.push(button(cx - 154.0, h - 27.0, 150.0, tr(label), act));
                     out.push(button(cx + 4.0, h - 27.0, 150.0, tr("gui.done"), Act::Done));
+                } else if matches!(page, Page::PunchyHandEditor(_)) {
+                    out.push(button(
+                        cx - 100.0,
+                        h - 27.0,
+                        200.0,
+                        Text::literal("Back to Punchy"),
+                        Act::Done,
+                    ));
                 } else {
                     out.push(done(h - 27.0));
                 }
@@ -6091,6 +6116,93 @@ mod tests {
         );
         // Its labels were made with the list, maybe in another language.
         assert_eq!(events.last(), Some(&Event::NativeSettings(0)));
+        assert_eq!(ui.page(), Page::NativeMod(0));
+    }
+
+    #[test]
+    fn punchy_hand_editor_opens_on_its_own_page() {
+        let atlas = atlas();
+        let size = (480.0, 360.0);
+        let mut settings = Settings::default();
+        let mut ui = OptionsUi::default();
+        let mut buttons = vec![String::new(); 45];
+        buttons[0] = "Animation speed: 1.0".into();
+        buttons[1] = "Reload animations and resource packs".into();
+        buttons[2] = "Hand poses: Punchy".into();
+        buttons[39] = "Resource source: Built-in".into();
+        buttons[40] = "Ready".into();
+        buttons[41] = "Held item: minecraft:diamond_pickaxe".into();
+        buttons[42] = "Selected item: minecraft:diamond_pickaxe".into();
+        buttons[43] = "Profile: none".into();
+        buttons[44] = "minecraft:pickaxes".into();
+        settings.mods.installed.push(crate::mod_list::Installed {
+            id: "punchy".into(),
+            title: "Punchy".into(),
+            description: String::new(),
+            problem: None,
+            dev: false,
+            has_settings: false,
+            native: Some(crate::mod_list::NativePage {
+                keys: vec![
+                    ["inspect".into(), "Inspect item".into(), "key.keyboard.f6".into()],
+                ],
+                buttons,
+                sliders: vec![crate::mod_list::NativeSlider {
+                    section: "Position".into(),
+                    label: "Offset X  0.000".into(),
+                    value: 0.5,
+                }],
+            }),
+        });
+        ui.show(Page::NativeMod(0));
+        let (settings_widgets, ..) = ui.layout(&settings, size.0, size.1);
+        assert!(!settings_widgets.iter().any(|widget| matches!(widget.kind, WKind::NativeSlider { .. })));
+        let open_editor = settings_widgets
+            .iter()
+            .find(|widget| matches!(
+                &widget.kind,
+                WKind::Button {
+                    label,
+                    act: Act::Push(Page::PunchyHandEditor(0)),
+                    ..
+                } if label.plain() == "Open Hand Editor"
+            ))
+            .expect("Punchy settings expose a separate Hand Editor button");
+        let events = ui.click(
+            &mut settings,
+            &atlas,
+            open_editor.x + 1.0,
+            open_editor.y + 1.0,
+            size,
+            [480, 360],
+            false,
+            false,
+        );
+        assert!(events.contains(&Event::ButtonClick));
+        assert_eq!(ui.page(), Page::PunchyHandEditor(0));
+        let (editor_widgets, ..) = ui.layout(&settings, size.0, size.1);
+        assert!(editor_widgets.iter().any(|widget| matches!(widget.kind, WKind::NativeSlider { .. })));
+        assert!(editor_widgets.iter().any(|widget| matches!(
+            widget.kind,
+            WKind::Button { act: Act::NativeButton(0, 3), .. }
+        )));
+        let back = editor_widgets
+            .iter()
+            .find(|widget| matches!(
+                &widget.kind,
+                WKind::Button { label, act: Act::Done, .. } if label.plain() == "Back to Punchy"
+            ))
+            .expect("the editor has a dedicated Back to Punchy button");
+        ui.click(
+            &mut settings,
+            &atlas,
+            back.x + 1.0,
+            back.y + 1.0,
+            size,
+            [480, 360],
+            false,
+            false,
+        );
         assert_eq!(ui.page(), Page::NativeMod(0));
     }
 

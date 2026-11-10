@@ -33,6 +33,11 @@ class PunchyEditorUiIconTests(unittest.TestCase):
         self.assertIn('44.. =>', runtime)
         self.assertIn('fn editor_scope_transform(', runtime)
         self.assertIn('let current_transform = editor_scope_transform(', runtime)
+        self.assertIn('PunchyHandEditor(usize)', renderer)
+        self.assertIn('Act::Push(Page::PunchyHandEditor(i))', renderer)
+        self.assertIn('Page::NativeMod(i) | Page::PunchyHandEditor(i)', renderer)
+        self.assertIn('Text::literal("Open Hand Editor")', renderer)
+        self.assertIn('Text::literal("Back to Punchy")', renderer)
 
     def test_android_launcher_uses_the_supplied_icon_resource(self):
         manifest = (ROOT / "packaging/android/AndroidManifest.xml").read_text()

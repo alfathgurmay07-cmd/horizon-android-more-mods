@@ -35,6 +35,9 @@ struct State {
     forced_stack: Option<(usize, ItemStack)>,
     consume_hand: action::Hand,
     active: Option<Playback>,
+    hand_motion: punchy_engine::hand_motion::HandMotion,
+    idle_layers: [IdleLayer; 2],
+    motion_blocked: bool,
     previous_swings: u32,
     use_down: bool,
     successful_use: VecDeque<action::Hand>,
@@ -53,6 +56,15 @@ struct State {
     resource_source: String,
     editor: HandEditor,
     last_slider: Option<String>,
+}
+#[derive(Clone, Debug, Default)]
+struct IdleLayer {
+    item: String,
+    clip: Option<String>,
+    time: f32,
+    previous_time: f32,
+    weight: f32,
+    previous_weight: f32,
 }
 #[derive(Clone, Debug)]
 struct HandEditor {
@@ -473,6 +485,9 @@ pub(super) fn resources_reloaded() {
         state.clips.clear();
         state.tuning = None;
         state.active = None;
+        state.hand_motion = Default::default();
+        state.idle_layers = Default::default();
+        state.motion_blocked = false;
         state.machine = Default::default();
         state.consume = Default::default();
         state.mining = Default::default();
@@ -524,6 +539,150 @@ fn tuning_animation(
     )
 }
 
+fn action_owns_arm(state: &State, left: bool) -> f32 {
+    let Some(playback) = &state.active else { return 0.0 };
+    let owner_left = state.main_left != (playback.hand == action::Hand::Off);
+    if left != owner_left
+        && !punchy_engine::policy::dual_handed(&playback.clip, playback.time, state.offhand_item, state.offhand_item)
+    {
+        return 0.0;
+    }
+    playback.previous_weight + (playback.weight - playback.previous_weight) * state.render_alpha
+}
+
+fn resolve_idle_clip(state: &State, left: bool) -> Option<String> {
+    let hand = if left == state.main_left { action::Hand::Main } else { action::Hand::Off };
+    let index = hand.index();
+    let item = state.last_items.get(index)?;
+    if item.is_empty() || item == "minecraft:air" { return None; }
+    let mapped = tuning_animation(state, hand, "idle");
+    let mut requested = Vec::new();
+    if let Some(animation) = mapped {
+        if let Some(name) = animation.name { requested.push(name); }
+        requested.extend(animation.variations);
+    }
+    requested.extend(["idle".to_owned(), "punchy_idle".to_owned()]);
+    requested.into_iter().flat_map(|name| {
+        punchy_engine::tuning::handed_candidates(&name, left)
+    }).find(|name| state.clips.contains_key(name))
+}
+
+fn update_idle_layers(state: &mut State, dt: f32, speed: f32, blocked: bool) {
+    let names = [resolve_idle_clip(state, false), resolve_idle_clip(state, true)];
+    for (index, name) in names.into_iter().enumerate() {
+        let left = index == 1;
+        let hand = if left == state.main_left { action::Hand::Main } else { action::Hand::Off };
+        let item = state.last_items[hand.index()].clone();
+        let owner = action_owns_arm(state, left);
+        let layer = &mut state.idle_layers[index];
+        if layer.item != item || layer.clip != name {
+            layer.item = item;
+            layer.clip = name;
+            layer.time = 0.0;
+            layer.previous_time = 0.0;
+            layer.weight = 0.0;
+            layer.previous_weight = 0.0;
+        }
+        layer.previous_time = layer.time;
+        layer.previous_weight = layer.weight;
+        let target = if layer.clip.is_some() && !blocked && owner < 0.02 { 1.0 } else { 0.0 };
+        let duration = if target > layer.weight { 0.27 } else { 0.20 };
+        layer.weight += (target - layer.weight) * (dt / duration).clamp(0.0, 1.0);
+        if layer.weight > 0.001 {
+            layer.time += dt * speed.max(0.1);
+        }
+    }
+}
+
+fn sampled_bone_delta(state: &State, clip: &Clip, bone: &str, time: f32, weight: f32) -> Mat4 {
+    let Some(base) = state.source.as_ref().and_then(|resources| resources.bones.get(bone)) else {
+        return Mat4::IDENTITY;
+    };
+    let local_time = clip.local_time(time);
+    let sample = Pose::default().blend(clip.sample(bone, local_time, local_time), weight.clamp(0.0, 1.0));
+    let mut rest = base.matrix();
+    rest.w_axis = (base.position / 16.0).extend(1.0);
+    let posed = if clip.effect_active("use_keyframes_v2", local_time) {
+        let rotation = base.rotation + sample.euler;
+        Mat4::from_scale_rotation_translation(
+            sample.scale,
+            Quat::from_euler(EulerRot::ZYX, rotation.z.to_radians(), rotation.y.to_radians(), rotation.x.to_radians()),
+            (base.position + sample.position) / 16.0,
+        )
+    } else {
+        rest * sample.matrix()
+    };
+    posed * rest.inverse()
+}
+
+fn clip_arm_delta(state: &State, clip: &Clip, left: bool, time: f32, weight: f32) -> Mat4 {
+    let side = if left { "left" } else { "right" };
+    let flip = Mat4::from_scale(Vec3::new(-1.0, -1.0, 1.0));
+    flip * sampled_bone_delta(state, clip, "camera", time, weight)
+        * sampled_bone_delta(state, clip, "body", time, weight)
+        * sampled_bone_delta(state, clip, &format!("{side}_arm"), time, weight)
+        * flip
+}
+
+fn locomotion_clip(sample: punchy_engine::hand_motion::Sample) -> (&'static [&'static str], f32, f32) {
+    use punchy_engine::hand_motion::Mode;
+    match sample.mode {
+        Mode::WalkForward => (&["punchy_moves_walk_forward", "punchy_moves_walk"], sample.phase, sample.walk_weight),
+        Mode::WalkBackward => (&["punchy_moves_walk_backward", "punchy_moves_walk"], sample.phase, sample.walk_weight),
+        Mode::WalkLeft => (&["punchy_moves_walk_left", "punchy_moves_walk"], sample.phase, sample.walk_weight),
+        Mode::WalkRight => (&["punchy_moves_walk_right", "punchy_moves_walk"], sample.phase, sample.walk_weight),
+        Mode::SprintForward => (&["punchy_moves_sprint_forward", "punchy_moves_sprint"], sample.phase, sample.sprint_weight),
+        Mode::SprintLeft => (&["punchy_moves_sprint_left", "punchy_moves_sprint"], sample.phase, sample.sprint_weight),
+        Mode::SprintRight => (&["punchy_moves_sprint_right", "punchy_moves_sprint"], sample.phase, sample.sprint_weight),
+        Mode::Jump => (&["punchy_moves_jump"], sample.air_time, sample.air_weight),
+        Mode::Fall => (&["punchy_moves_fall"], sample.air_time, sample.fall_weight.max(0.45)),
+        Mode::Land => (&["punchy_moves_land"], sample.phase, sample.air_weight.max(0.45)),
+        Mode::Air => (&[], sample.phase, 0.0),
+        Mode::Climb => (&["climb2", "climb"], sample.phase, sample.special_weight),
+        Mode::Crawl => (&["crawl"], sample.phase, sample.special_weight),
+        Mode::Ride => (&["newhorse_riding_loop"], sample.phase, sample.special_weight),
+        Mode::RideIdle => (&["newhorse_riding_idle"], sample.phase, sample.special_weight),
+        Mode::Rowing => (&[], sample.phase, sample.special_weight),
+        Mode::Flight => (&["punchy_moves_fall_flying", "punchy_moves_fall"], sample.air_time, sample.flight_weight),
+        Mode::Swim => (&["punchy_moves_swim", "swiming", "swiming_above"], sample.phase, 0.45),
+        Mode::Idle => (&["punchy_moves_idle"], sample.phase, sample.idle_weight * 0.82),
+    }
+}
+
+fn locomotion_delta(state: &State, left: bool, alpha: f32, action_weight: f32) -> (Mat4, f32) {
+    let sample = state.hand_motion.sample(alpha);
+    let (candidates, time, weight) = locomotion_clip(sample);
+    if weight <= 0.001 { return (Mat4::IDENTITY, 0.0); }
+    let Some(clip) = candidates.iter().find_map(|name| state.clips.get(*name)) else {
+        return (Mat4::IDENTITY, 0.0);
+    };
+    let side = if left { "left_arm" } else { "right_arm" };
+    if !clip.tracks.contains_key(side) && !clip.tracks.contains_key("camera") && !clip.tracks.contains_key("body") {
+        return (Mat4::IDENTITY, 0.0);
+    }
+    let effective_weight = weight * (1.0 - action_weight.clamp(0.0, 1.0) * 0.92);
+    (clip_arm_delta(state, clip, left, time, effective_weight), effective_weight)
+}
+
+fn idle_delta(state: &State, left: bool, alpha: f32, action_weight: f32) -> Mat4 {
+    let layer = &state.idle_layers[usize::from(left)];
+    let Some(name) = layer.clip.as_deref() else { return Mat4::IDENTITY };
+    let Some(clip) = state.clips.get(name) else { return Mat4::IDENTITY };
+    let t = alpha.clamp(0.0, 1.0);
+    let time = layer.previous_time + (layer.time - layer.previous_time) * t;
+    let weight = (layer.previous_weight + (layer.weight - layer.previous_weight) * t)
+        * (1.0 - action_weight.clamp(0.0, 1.0));
+    clip_arm_delta(state, clip, left, time, weight)
+}
+
+fn motion_delta(state: &State, left: bool, alpha: f32) -> Mat4 {
+    let action_weight = action_owns_arm(state, left);
+    let (locomotion, coverage) = locomotion_delta(state, left, alpha, action_weight);
+    state.hand_motion.matrix_with_influence(left, alpha, action_weight, 1.0 - coverage.clamp(0.0, 1.0) * 0.92)
+        * locomotion
+        * idle_delta(state, left, alpha, action_weight)
+}
+
 pub(super) fn tick(game: &mut Game<'_>) {
     if !game.native_window() {
         return;
@@ -532,6 +691,9 @@ pub(super) fn tick(game: &mut Game<'_>) {
         STATE.with(|s| {
             let mut s = s.borrow_mut();
             s.active = None;
+            s.hand_motion = Default::default();
+            s.idle_layers = Default::default();
+            s.motion_blocked = false;
             s.machine = Default::default();
             s.consume = Default::default();
             s.mining = Default::default();
@@ -558,6 +720,34 @@ pub(super) fn tick(game: &mut Game<'_>) {
         if s.source.is_none() {return;}
         s.main_left=game.settings.main_hand_left;
         s.offhand_item=items[1].is_some();
+        if let Some(player) = game.player.as_ref() {
+            let velocity = player.velocity;
+            s.hand_motion.tick(punchy_engine::hand_motion::Input {
+                dt: 0.05,
+                forward: player.applied_input[1],
+                strafe: player.applied_input[0],
+                horizontal_speed: ((velocity.x * velocity.x + velocity.z * velocity.z) as f32).sqrt(),
+                velocity_x: velocity.x as f32,
+                velocity_z: velocity.z as f32,
+                vertical_speed: velocity.y as f32,
+                fall_distance: player.fall_distance as f32,
+                yaw: game.yaw,
+                pitch: game.pitch,
+                grounded: player.ground.on_ground,
+                sprinting: player.sprinting,
+                sneaking: player.shift_key_down || player.local_crouching,
+                swimming: player.swimming,
+                fall_flying: player.fall_flying,
+                flying: player.flying,
+                spectator: player.spectator,
+                passenger: player.is_passenger,
+                sleeping: player.sleeping,
+                climbing: player.last_climbable.is_some() && (player.jumping || player.shift_key_down || player.applied_input[1].abs() > 0.05),
+                crawling: player.pose == horizon_client::pose::Pose::Swimming && !player.swimming,
+                riding_horse: game.riding.and_then(|id| game.mobs.iter().find(|mob| mob.id == id)).is_some_and(|mob| horizon_client::mobs::equine::is_equine(mob.species())),
+                rowing: game.riding.and_then(|id| game.boats.iter().find(|boat| boat.id == id)).is_some_and(|boat| boat.paddling.iter().any(|paddling| *paddling)),
+            });
+        }
         let mut input=action::Input { animation_speed:speed, use_down,
             mining:game.mining.is_some(),
             entity_target:game.pick_entity_hit().flatten().is_some(),
@@ -588,6 +778,9 @@ pub(super) fn tick(game: &mut Game<'_>) {
                 s.last_items[i]=id;
             }
         }
+        s.motion_blocked = input.mining || use_down || game.player.as_ref().is_some_and(|player| player.swimming || player.fall_flying || player.flying || player.sleeping || player.is_passenger || player.spectator || player.last_climbable.is_some() || player.pose == horizon_client::pose::Pose::Swimming && !player.swimming);
+        let motion_blocked = s.motion_blocked;
+        update_idle_layers(&mut s, 0.05, speed, motion_blocked);
         let input_driven=tuning_animation(&s,use_hand,"useItem").is_some_and(|e|e.trigger_on_input);
         input.use_trigger=s.successful_use.pop_front().or_else(|| (use_down && !was_use_down && input_driven).then_some(use_hand));
         if let Some(h)=using {
@@ -1243,6 +1436,11 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
             hand_delta(&s, false, s.render_alpha),
             hand_delta(&s, true, s.render_alpha),
         ];
+        let motion = if s.enabled && game.native_setting(ID, "hand_poses").as_deref() != Some("horizon") {
+            [motion_delta(&s, false, s.render_alpha), motion_delta(&s, true, s.render_alpha)]
+        } else {
+            [Mat4::IDENTITY; 2]
+        };
         let active = if let Some(p) = &s.active {
             let left = s.main_left != (p.hand == action::Hand::Off);
             let dual = punchy_engine::policy::dual_handed(&p.clip, p.time, s.offhand_item, s.offhand_item);
@@ -1324,6 +1522,7 @@ pub(super) fn begin(game: &mut Game<'_>, alpha: f64) {
             authored,
             enabled: s.enabled,
             deltas,
+            motion,
             active,
         });
     });
@@ -1339,7 +1538,7 @@ pub(super) fn item_pose(
     pose: horizon_client::first_person::ItemPose,
 ) -> Mat4 {
     if let Some(pose) = punchy_engine::horizon_pose::authored(left) {
-        return pose.item;
+        return punchy_engine::horizon_pose::motion(left) * pose.item;
     }
     let swing = if punchy_engine::horizon_pose::suppress_swing(left) {
         0.
@@ -1353,7 +1552,7 @@ pub(super) fn item_pose(
 }
 pub(super) fn arm_pose(left: bool, height: f32, attack: f32) -> Mat4 {
     if let Some(pose) = punchy_engine::horizon_pose::authored(left) {
-        return pose.arm;
+        return punchy_engine::horizon_pose::motion(left) * pose.arm;
     }
     let swing = if punchy_engine::horizon_pose::suppress_swing(left) {
         0.

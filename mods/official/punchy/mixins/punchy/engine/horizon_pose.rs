@@ -10,6 +10,7 @@ pub struct Frame {
     pub authored: [Option<crate::attachments::StandardPose>; 2],
     pub enabled: bool,
     pub deltas: [Mat4; 2],
+    pub motion: [Mat4; 2],
     pub active: [bool; 2],
 }
 impl Default for Frame {
@@ -18,6 +19,7 @@ impl Default for Frame {
             authored: [None, None],
             enabled: false,
             deltas: [Mat4::IDENTITY; 2],
+            motion: [Mat4::IDENTITY; 2],
             active: [false; 2],
         }
     }
@@ -35,14 +37,25 @@ pub fn transform(left: bool, value: Mat4) -> Mat4 {
     FRAME.with(|slot| {
         let frame = slot.get();
         let i = usize::from(left);
-        if frame.enabled && frame.active[i] {
-            frame.deltas[i] * value
+        if frame.enabled {
+            let value = frame.motion[i] * value;
+            if frame.active[i] {
+                frame.deltas[i] * value
+            } else {
+                value
+            }
         } else {
             value
         }
     })
 }
 /// Whether the current clip owns this physical arm and replaces vanilla swing.
+pub fn motion(left: bool) -> Mat4 {
+    FRAME.with(|slot| {
+        let frame = slot.get();
+        if frame.enabled { frame.motion[usize::from(left)] } else { Mat4::IDENTITY }
+    })
+}
 pub fn suppress_swing(left: bool) -> bool {
     FRAME.with(|slot| {
         let frame = slot.get();
@@ -74,12 +87,29 @@ mod tests {
             enabled: false,
             active: [true; 2],
             deltas: [Mat4::from_scale(Vec3::splat(2.0)); 2],
+            motion: [Mat4::IDENTITY; 2],
         });
         assert_eq!(transform(false, pose), pose);
         assert_eq!(transform(true, pose), pose);
         assert!(!suppress_swing(false));
         assert!(!suppress_swing(true));
     }
+    #[test]
+    fn motion_layer_applies_without_taking_over_vanilla_swing() {
+        let base = Mat4::from_translation(Vec3::new(0.0, 0.0, 1.0));
+        let delta = Mat4::from_translation(Vec3::new(0.2, 0.0, 0.0));
+        set_frame(Frame {
+            authored: [None, None],
+            enabled: true,
+            deltas: [Mat4::IDENTITY; 2],
+            motion: [delta; 2],
+            active: [false; 2],
+        });
+        assert_eq!(transform(false, base), delta * base);
+        assert!(!suppress_swing(false));
+        assert_eq!(motion(true), delta);
+    }
+
     #[test]
     fn physical_arm_ownership_is_independent_and_new_frame_clears_it() {
         let base = Mat4::from_rotation_z(0.3);
@@ -90,6 +120,7 @@ mod tests {
             enabled: true,
             active: [true, false],
             deltas: [right, left],
+            motion: [Mat4::IDENTITY; 2],
         });
         assert_eq!(transform(false, base), right * base);
         assert_eq!(transform(true, base), base);
@@ -100,6 +131,7 @@ mod tests {
             enabled: true,
             active: [false, true],
             deltas: [right, left],
+            motion: [Mat4::IDENTITY; 2],
         });
         assert_eq!(transform(false, base), base);
         assert_eq!(transform(true, base), left * base);
