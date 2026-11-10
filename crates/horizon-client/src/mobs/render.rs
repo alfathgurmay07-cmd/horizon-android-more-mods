@@ -1117,7 +1117,7 @@ pub fn base_transform_at(m: &Mob, alpha: f32, origin: glam::Mat4) -> glam::Mat4 
     }
     base *= species_rotations(m, alpha);
     #[cfg(target_os = "android")]
-    let base = super::punchy_moves::body(m, alpha, base);
+    let mut base = super::punchy_moves::body(m, alpha, base);
     base *= glam::Mat4::from_scale(glam::Vec3::new(-1.0, -1.0, 1.0));
     base *= species_scale(m, alpha);
     base * glam::Mat4::from_translation(glam::Vec3::new(0.0, -1.501, 0.0))

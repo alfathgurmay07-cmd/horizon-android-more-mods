@@ -14,18 +14,30 @@ Punchy Moves no longer owns first-person arm/item transforms or first-person
 motion settings; it remains responsible for third-person player motion and
 elytra trails. The existing Punchy action/item animation system remains intact.
 
+BUILD FIX FOR GITHUB ACTIONS RUN 42834568412
+The Android build reported Rust E0596 in
+crates/horizon-client/src/mobs/render.rs:1120 because `base` was mutated after
+an immutable binding. The Android Punchy Moves adapter binding is now `let mut
+base`, allowing the following matrix multiplications. This addresses the
+reported compiler error; rerun CI to check for any subsequent errors.
+
 APPLICATION
 Extract this archive into the original project root and allow it to overwrite
 the listed files. This is a delta archive, not a full source project. No source
 files were deleted from the baseline.
 
 VALIDATION
-Focused integration tests: 11 passed.
-Expanded Punchy checks: 37 passed; one existing baseline assertion was excluded
-because it expects transform_for(&context, left, true), which is absent in the
-original baseline runtime as well.
+Focused Punchy/Punchy Moves integration tests: 12 passed.
+Official Android native-mod layout and registration checker: passed.
+A dedicated regression test now asserts that the Android-only body transform
+binding is mutable before its matrix multiply-assignments.
+The full repository pytest collection is not runnable from the supplied source
+archive in this environment: duplicate test module names exist under tools/ and
+tests/, and parity tests require the generated .local/minecraft/26.3 client.jar.
 Rust/Android compilation was not run because cargo, rustc and rustfmt are absent
-from the editing environment.
+from the editing environment. The supplied GitHub Actions log showed one fatal
+Rust compiler error (E0596); this source delta fixes that exact compiler error.
+A clean APK build still requires running the Android workflow against this delta.
 
 MODIFIED FILES
 CHANGED-FILES-MANIFEST.txt

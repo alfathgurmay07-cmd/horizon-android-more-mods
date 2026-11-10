@@ -72,3 +72,14 @@ def test_punchy_moves_native_mod_and_runtime_hooks_are_registered():
     assert "self.mark_translucent_entity(trail_start, \"minecraft:player\")" in game
     assert "super::punchy_moves::ID" in trails
     assert 'Display name: `Punchy Moves`' in (PACKAGE / "README.md").read_text(encoding="utf-8")
+
+
+def test_android_body_transform_binding_is_mutable_before_matrix_updates():
+    source = (ROOT / "crates/horizon-client/src/mobs/render.rs").read_text(encoding="utf-8")
+    lines = source.splitlines()
+    needle = "let mut base = super::punchy_moves::body(m, alpha, base);"
+    assert any(line.strip() == needle for line in lines)
+    index = next(i for i, line in enumerate(lines) if line.strip() == needle)
+    following = "\n".join(lines[index + 1 : index + 5])
+    assert "base *= glam::Mat4::from_scale" in following
+    assert "base *= species_scale(m, alpha);" in following
