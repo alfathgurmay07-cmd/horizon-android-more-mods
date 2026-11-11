@@ -25,7 +25,7 @@
       "id": "connected_textures",
       "name": "Continuity Horizon",
       "path": "mods/official/hnmods/continuity-horizon",
-      "version": "0.1.0",
+      "version": "0.1.7",
       "commit": "4197efc852b02d2152e607dc84509f90730e57ca",
       "horizon": "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca",
       "horizon_mixins": "d9c83d7096b7ea5b83678da2efdfd6161f74997e",
