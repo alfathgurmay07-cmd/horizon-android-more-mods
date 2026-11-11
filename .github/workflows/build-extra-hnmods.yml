@@ -54,7 +54,12 @@ jobs:
           /tmp/skinlayers-tests
 
       - name: Test Horizon Sodium
-        run: cargo test --locked --manifest-path mods/official/hnmods/horizon-sodium/Cargo.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a mods/official/hnmods/horizon-sodium /tmp/horizon-sodium
+          printf '\n[workspace]\n' >> /tmp/horizon-sodium/Cargo.toml
+          cargo test --locked --manifest-path /tmp/horizon-sodium/Cargo.toml
 
       - name: Package four distributable HNMODs
         run: python3 tools/package_extra_hnmods.py --output .local/extra-hnmods
@@ -94,4 +99,9 @@ jobs:
           rustup default stable
 
       - name: Test voice protocol and routing core
-        run: cargo test --locked --manifest-path mods/server/horizon-vc/core/Cargo.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a mods/server/horizon-vc/core /tmp/horizon-vc-core
+          printf '\n[workspace]\n' >> /tmp/horizon-vc-core/Cargo.toml
+          cargo test --locked --manifest-path /tmp/horizon-vc-core/Cargo.toml
