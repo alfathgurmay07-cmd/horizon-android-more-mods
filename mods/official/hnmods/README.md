@@ -13,7 +13,7 @@ git submodule update --init --recursive
 |---|---|---:|---|
 | BridgingMod | `bridgingmod-horizon/` | 1.0.0 | Packaged by CI as desktop HNMOD |
 | Punchy Horizon | `punchy-horizon/` | 0.1.4 | Source pinned; not repackaged because original Punchy code/data carry a custom all-rights-reserved license |
-| Continuity | `continuity-horizon/` | 0.1.0 | Upstream packaging script + source tests run in CI |
+| Continuity | `continuity-horizon/` | 0.1.7 | Upstream packaging script + source tests run in CI |
 | 3D Skin Layers | `skinlayers3d-horizon/` | 0.1.0 | Packaged by CI as desktop HNMOD |
 | Horizon Sodium | `horizon-sodium/` | 0.4.0 | Upstream packaging script + source tests run in CI |
 
