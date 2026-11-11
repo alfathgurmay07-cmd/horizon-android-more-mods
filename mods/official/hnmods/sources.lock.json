@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "minecraft": "26.3",
-  "note": "Pinned source-only Horizon native mods. These gitlinks do not activate the mods in the Android APK.",
+  "note": "Pinned desktop Horizon native mods and user-supplied package references. None of these dynamically activate mods in the Android APK.",
   "modules": [
     {
       "id": "bridgingmod",
@@ -19,7 +19,7 @@
       "path": "mods/official/hnmods/punchy-horizon",
       "version": "0.1.4",
       "commit": "2ea0bedfdbb9bdd7561c868078745b789fc8f60a",
-      "license": "Original Punchy implementation and animation data are custom all-rights-reserved; keep it as an upstream submodule and do not repackage or redistribute."
+      "license": "Original Punchy implementation and animation data are custom all-rights-reserved; do not repackage or redistribute."
     },
     {
       "id": "connected_textures",
@@ -50,6 +50,28 @@
       "horizon": "c9d474dd9116e84c243f8992d75c11314df56f06",
       "horizon_mixins": "4342a0bfbe71d4d14185528d64e496d6022f16a1",
       "license": "MIT with separately retained Sodium and Sodium Extra notices"
+    },
+    {
+      "id": "spatial_gui",
+      "name": "Spatial GUI",
+      "path": "mods/official/hnmods/external-packages/spatial_gui-0.2.1.hnmod",
+      "version": "0.2.1",
+      "sha256": "f130bac3c85fe2295aedf5d2f92d8d6262be2003d9b791a9771ee06e97886345",
+      "horizon": "66f3981f522b24c250b21523a70080965b940424",
+      "horizon_mixins": "e8cd0aa38cffef49cb2e088ef716baa107148c02",
+      "license": "MIT",
+      "status": "User-supplied prebuilt bundle; metadata tracked, binary not mirrored"
+    },
+    {
+      "id": "showmeyourskin",
+      "name": "Show Me Your Skin",
+      "path": "mods/official/hnmods/external-packages/showmeyourskin-2.0.3.hnmod",
+      "version": "2.0.3",
+      "sha256": "884a49c001ff2b346399503bfb5a7abb986bdb753111343b362ad1aab9b5c9ec",
+      "horizon": "f319701e8c9ab657ff562250b3ba07b2d654e3bc",
+      "horizon_mixins": "e8cd0aa38cffef49cb2e088ef716baa107148c02",
+      "license": "MIT",
+      "status": "User-supplied prebuilt bundle; metadata tracked, binary not mirrored"
     },
     {
       "id": "horizonvc",
