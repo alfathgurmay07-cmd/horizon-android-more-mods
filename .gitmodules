@@ -1,0 +1,23 @@
+[submodule "mods/official/hnmods/bridgingmod-horizon"]
+	path = mods/official/hnmods/bridgingmod-horizon
+	url = https://github.com/xiryuudev/bridgingMod-horizon
+
+[submodule "mods/official/hnmods/punchy-horizon"]
+	path = mods/official/hnmods/punchy-horizon
+	url = https://github.com/MoonFvv/punchy-horizon
+
+[submodule "mods/official/hnmods/continuity-horizon"]
+	path = mods/official/hnmods/continuity-horizon
+	url = https://github.com/tariksabanuz/ContinuityHorizon
+
+[submodule "mods/official/hnmods/skinlayers3d-horizon"]
+	path = mods/official/hnmods/skinlayers3d-horizon
+	url = https://github.com/badmasti2/skinlayers3d-horizon
+
+[submodule "mods/official/hnmods/horizon-sodium"]
+	path = mods/official/hnmods/horizon-sodium
+	url = https://github.com/badmasti2/horizon-sodium
+
+[submodule "mods/server/horizon-vc"]
+	path = mods/server/horizon-vc
+	url = https://github.com/Plugin-Horizon/horizon-vc

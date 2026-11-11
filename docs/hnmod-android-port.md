@@ -129,3 +129,16 @@ python tools/android_build.py --abi arm64-v8a --public
 The project documents Rust 1.95, Python 3.11+, Android SDK platform 35, Android
 build-tools, NDK, a JDK, and Gradle 8.14. Build only after those prerequisites and
 the project's private game-data preparation are configured.
+
+
+## Additional desktop HNMOD sources
+
+Pinned upstream source submodules are located under `mods/official/hnmods/`; HorizonVC is separated under
+`mods/server/horizon-vc/`. The GitHub Actions workflow **Build Extra Horizon HNMODs** runs the source checks and
+packages four desktop bundles (BridgingMod, Continuity, Skin Layers 3D and Horizon Sodium) as workflow artifacts.
+Punchy Horizon v0.1.4 is pinned to its upstream source, but is deliberately not repackaged because its original
+implementation and animation data carry a custom all-rights-reserved license. HorizonVC's standalone core tests run
+separately; its full server hooks still depend on the Detimes `mod-hooks-fake-players` branch.
+
+These additions do not create Android adapters or activate the modules in the APK. Each client mod still needs to be
+ported to the fixed Android Rust module list, registered in Options > Mods and tested in an Android build.

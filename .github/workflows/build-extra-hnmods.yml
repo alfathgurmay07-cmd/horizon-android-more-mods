@@ -1,0 +1,97 @@
+name: Build Extra Horizon HNMODs
+
+on:
+  push:
+    branches: [android]
+    paths:
+      - ".gitmodules"
+      - "mods/official/hnmods/**"
+      - "mods/server/horizon-vc"
+      - "tools/package_extra_hnmods.py"
+      - ".github/workflows/build-extra-hnmods.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extra-hnmods-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-client-hnmods:
+    name: Test and package desktop HNMODs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository and pinned submodules
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+
+      - name: Test Continuity
+        working-directory: mods/official/hnmods/continuity-horizon
+        run: |
+          python3 check/build.py
+          rustc --edition 2024 --test test/lib.rs -o /tmp/continuity-tests
+          /tmp/continuity-tests
+
+      - name: Test Skin Layers 3D
+        working-directory: mods/official/hnmods/skinlayers3d-horizon
+        run: |
+          rustc --edition 2024 --test tests/mesh.rs -o /tmp/skinlayers-tests
+          /tmp/skinlayers-tests
+
+      - name: Test Horizon Sodium
+        run: cargo test --locked --manifest-path mods/official/hnmods/horizon-sodium/Cargo.toml
+
+      - name: Package four distributable HNMODs
+        run: python3 tools/package_extra_hnmods.py --output .local/extra-hnmods
+
+      - name: Verify each HNMOD archive has a manifest and bundle source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for archive in .local/extra-hnmods/*.hnmod; do
+            unzip -t "$archive"
+            unzip -Z1 "$archive" | grep -qx 'horizon-native.json'
+            unzip -Z1 "$archive" | grep -q 'horizon-mixin.toml'
+          done
+
+      - name: Upload HNMOD artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: horizon-extra-hnmods
+          path: .local/extra-hnmods/*.hnmod
+          if-no-files-found: error
+          retention-days: 30
+
+  test-horizon-vc:
+    name: Test HorizonVC server core
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository and pinned submodules
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Test voice protocol and routing core
+        run: cargo test --locked --manifest-path mods/server/horizon-vc/core/Cargo.toml

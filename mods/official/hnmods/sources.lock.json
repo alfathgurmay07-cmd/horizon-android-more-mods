@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "minecraft": "26.3",
+  "note": "Pinned source-only Horizon native mods. These gitlinks do not activate the mods in the Android APK.",
+  "modules": [
+    {
+      "id": "bridgingmod",
+      "name": "BridgingMod",
+      "path": "mods/official/hnmods/bridgingmod-horizon",
+      "version": "1.0.0",
+      "commit": "066baad0c990c1a3bece048a5759b622568873b4",
+      "horizon": "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca",
+      "horizon_mixins": "5a64af938ec86b00d53d16a408aabc0038fb3e57",
+      "license": "MIT"
+    },
+    {
+      "id": "punchy",
+      "name": "Punchy Horizon",
+      "path": "mods/official/hnmods/punchy-horizon",
+      "version": "0.1.4",
+      "commit": "2ea0bedfdbb9bdd7561c868078745b789fc8f60a",
+      "license": "Original Punchy implementation and animation data are custom all-rights-reserved; keep it as an upstream submodule and do not repackage or redistribute."
+    },
+    {
+      "id": "connected_textures",
+      "name": "Continuity Horizon",
+      "path": "mods/official/hnmods/continuity-horizon",
+      "version": "0.1.0",
+      "commit": "4197efc852b02d2152e607dc84509f90730e57ca",
+      "horizon": "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca",
+      "horizon_mixins": "d9c83d7096b7ea5b83678da2efdfd6161f74997e",
+      "license": "MIT"
+    },
+    {
+      "id": "skinlayers3d_horizon",
+      "name": "3D Skin Layers",
+      "path": "mods/official/hnmods/skinlayers3d-horizon",
+      "version": "0.1.0",
+      "commit": "da7fdf321da2a612bf344b0a112835528b4e0f2b",
+      "horizon": "c9d474dd9116e84c243f8992d75c11314df56f06",
+      "horizon_mixins": "4342a0bfbe71d4d14185528d64e496d6022f16a1",
+      "license": "MIT"
+    },
+    {
+      "id": "sodium_horizon",
+      "name": "Horizon Sodium",
+      "path": "mods/official/hnmods/horizon-sodium",
+      "version": "0.4.0",
+      "commit": "982443d72db68ee5d9aa517495c35e5b936178f5",
+      "horizon": "c9d474dd9116e84c243f8992d75c11314df56f06",
+      "horizon_mixins": "4342a0bfbe71d4d14185528d64e496d6022f16a1",
+      "license": "MIT with separately retained Sodium and Sodium Extra notices"
+    },
+    {
+      "id": "horizonvc",
+      "name": "HorizonVC",
+      "path": "mods/server/horizon-vc",
+      "version": "0.1.0",
+      "commit": "43dcc366844bbc7f50947f3928805473567a7c6a",
+      "license": "MIT",
+      "category": "server-side",
+      "engine": "https://github.com/Detimes/horizon/tree/mod-hooks-fake-players",
+      "engine_commit": "a997614a71bf1df23a353deb89134138ee7b8993",
+      "note": "Core crate tests only; engine hook glue and real voice client/audio are not yet validated."
+    }
+  ]
+}

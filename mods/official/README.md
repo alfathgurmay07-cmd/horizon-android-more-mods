@@ -30,3 +30,12 @@ Voice Chat and Inventory Profiles were removed from this tree at the user's requ
 | `jade/` | `jade` | 26.3.6 | Android game, HUD, configuration, commands and display hooks |
 | `armorhud/` | `armorhud` | 1.0.0 | Android settings, keybind and HUD |
 | `resourcify/` | `resourcify` | 0.1.1 | Android resource-pack browser in Options |
+
+
+## Additional desktop HNMOD sources
+
+Pinned community sources and their build workflow are under `hnmods/`. CI packages BridgingMod 1.0.0,
+Continuity 0.1.0, Skin Layers 3D 0.1.0 and Horizon Sodium 0.4.0 as desktop `.hnmod` artifacts.
+Punchy Horizon 0.1.4 remains upstream-pinned and is not mirrored/repackaged due to its custom all-rights-reserved
+license. These are source-only desktop bundles, not Android static ports; they are not activated in the APK.
+See [the HNMOD source index](hnmods/README.md) and [server-side mods](../../mods/server/README.md).
