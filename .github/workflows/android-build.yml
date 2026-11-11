@@ -1,4 +1,3 @@
-
 name: Build Android APK
 run-name: ${{ inputs.build_type || 'Build Android APK' }} · ${{ inputs.abi || 'arm64-v8a' }} · ${{ github.ref_name }}
 
@@ -23,8 +22,6 @@ on:
           - x86_64
           - armeabi-v7a
           - x86
-          - 32 + 64 arm
-          - All In One arch
 
 permissions:
   contents: write
@@ -81,8 +78,6 @@ jobs:
 
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;28.2.13676358"
@@ -126,6 +121,9 @@ jobs:
           gradle = gradle_path.read_text(encoding="utf-8")
           rust = rust_path.read_text(encoding="utf-8")
 
+          # This repository obtains versionCode from a Gradle property with a
+          # checked-in fallback, so bump that fallback rather than replacing
+          # the Gradle expression with a hard-coded value.
           code_pattern = re.compile(
               r"(?m)^([ \t]*versionCode[ \t]+providers\.gradleProperty\('devVersionCode'\)\.getOrElse\(')(\d+)('\)\.toInteger\(\)[ \t]*$)"
           )
@@ -251,31 +249,16 @@ jobs:
         env:
           ABI: ${{ inputs.abi }}
           HORIZON_ANDROID_BUILD_COMMIT: ${{ github.sha }}
-        shell: bash
-        run: |
-          if [[ "$ABI" == "All In One arch" ]]; then
-            ABIS=(arm64-v8a x86_64 armeabi-v7a x86)
-          elif [[ "$ABI" == "32 + 64 arm" ]]; then
-            ABIS=(arm64-v8a armeabi-v7a)
-          else
-            ABIS=("$ABI")
-          fi
-
-          for ABI in "${ABIS[@]}"; do
-            echo "::group::Building Public APK for $ABI"
-
-            python tools/android_build.py \
-              --abi "$ABI" \
-              --public \
-              --profile release \
-              --sdk "$ANDROID_HOME" \
-              --java-home "$JAVA_HOME" \
-              --gradle "$(command -v gradle)" \
-              --ndk-version 28.2.13676358 \
-              --build-tools-version 35.0.0
-
-            echo "::endgroup::"
-          done
+        run: >-
+          python tools/android_build.py
+          --abi "$ABI"
+          --public
+          --profile release
+          --sdk "$ANDROID_HOME"
+          --java-home "$JAVA_HOME"
+          --gradle "$(command -v gradle)"
+          --ndk-version 28.2.13676358
+          --build-tools-version 35.0.0
 
       - name: Build development APK
         if: inputs.build_type == 'Dev Builds'
@@ -283,38 +266,24 @@ jobs:
           ABI: ${{ inputs.abi }}
           DEV_BUILD_NUMBER: ${{ github.run_number }}
           HORIZON_ANDROID_BUILD_COMMIT: ${{ github.sha }}
-        shell: bash
-        run: |
-          if [[ "$ABI" == "All In One arch" ]]; then
-            ABIS=(arm64-v8a x86_64 armeabi-v7a x86)
-          elif [[ "$ABI" == "32 + 64 arm" ]]; then
-            ABIS=(arm64-v8a armeabi-v7a)
-          else
-            ABIS=("$ABI")
-          fi
-
-          for ABI in "${ABIS[@]}"; do
-            echo "::group::Building Dev APK for $ABI"
-
-            python tools/android_build.py \
-              --abi "$ABI" \
-              --public \
-              --profile release \
-              --dev-build "$DEV_BUILD_NUMBER" \
-              --dev-version-code "$((1000000000 + DEV_BUILD_NUMBER))" \
-              --sdk "$ANDROID_HOME" \
-              --java-home "$JAVA_HOME" \
-              --gradle "$(command -v gradle)" \
-              --ndk-version 28.2.13676358 \
-              --build-tools-version 35.0.0
-
-            echo "::endgroup::"
-          done
+        run: >-
+          python tools/android_build.py
+          --abi "$ABI"
+          --public
+          --profile release
+          --dev-build "$DEV_BUILD_NUMBER"
+          --dev-version-code "$((1000000000 + DEV_BUILD_NUMBER))"
+          --sdk "$ANDROID_HOME"
+          --java-home "$JAVA_HOME"
+          --gradle "$(command -v gradle)"
+          --ndk-version 28.2.13676358
+          --build-tools-version 35.0.0
 
       - name: Upload Android APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: horizon-android-${{ inputs.build_type == 'Public Builds' && 'public' || 'dev' }}-${{ inputs.abi == 'All In One arch' && 'all-arch' || inputs.abi == '32 + 64 arm' && 'arm32-arm64' || inputs.abi }}-apk
-          path: .local/android/apk/*/horizon-android-public.apk
+          name: horizon-android-${{ inputs.build_type == 'Public Builds' && 'public' || 'dev' }}-${{ inputs.abi }}-apk
+          path: .local/android/apk/${{ inputs.abi }}/horizon-android-public.apk
           if-no-files-found: error
           retention-days: ${{ inputs.build_type == 'Public Builds' && 30 || 14 }}
+
