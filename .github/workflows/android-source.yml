@@ -36,7 +36,7 @@ jobs:
           rustup target add wasm32-unknown-unknown
       - name: Compile official WebAssembly mods
         run: |
-          cargo check --locked --target wasm32-unknown-unknown -p far-view -p fps-overlay -p keystrokes -p minimap -p recipes -p zoom
+          cargo check --target wasm32-unknown-unknown -p far-view -p fps-overlay -p keystrokes -p minimap -p recipes -p zoom
       - run: python3 tools/test_android_diagnostics.py
       - run: python3 tools/test_android_performance.py
       - run: python3 tools/test_android_content.py
