@@ -9,6 +9,14 @@ on:
       - "mods/server/horizon-vc"
       - "tools/package_extra_hnmods.py"
       - ".github/workflows/build-extra-hnmods.yml"
+  pull_request:
+    branches: [android]
+    paths:
+      - ".gitmodules"
+      - "mods/official/hnmods/**"
+      - "mods/server/horizon-vc"
+      - "tools/package_extra_hnmods.py"
+      - ".github/workflows/build-extra-hnmods.yml"
   workflow_dispatch:
 
 permissions:
@@ -64,17 +72,23 @@ jobs:
       - name: Package four distributable HNMODs
         run: python3 tools/package_extra_hnmods.py --output .local/extra-hnmods
 
-      - name: Verify each HNMOD archive has a manifest and bundle source
+      - name: Verify exactly four HNMOD archives and inspect their contents
         shell: bash
         run: |
           set -euo pipefail
-          for archive in .local/extra-hnmods/*.hnmod; do
+          mapfile -t archives < <(find .local/extra-hnmods -maxdepth 1 -type f -name '*.hnmod' | sort)
+          if [[ "${#archives[@]}" -ne 4 ]]; then
+            printf 'Expected exactly 4 distributable HNMODs; found %s\n' "${#archives[@]}" >&2
+            printf '%s\n' "${archives[@]}" >&2
+            exit 1
+          fi
+          for archive in "${archives[@]}"; do
             unzip -t "$archive"
             unzip -Z1 "$archive" | grep -qx 'horizon-native.json'
             unzip -Z1 "$archive" | grep -q 'horizon-mixin.toml'
           done
 
-      - name: Upload HNMOD artifacts
+      - name: Upload distributable HNMOD artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: horizon-extra-hnmods
@@ -83,7 +97,7 @@ jobs:
           retention-days: 30
 
   test-horizon-vc:
-    name: Test HorizonVC server core
+    name: Test HorizonVC server core (not a client HNMOD)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
